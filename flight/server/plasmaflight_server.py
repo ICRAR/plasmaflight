@@ -36,7 +36,7 @@ import pyarrow.plasma as plasma
 class FlightKey:
     descriptor_type: int = flight.DescriptorType.UNKNOWN.value
     command: Optional[str] = None
-    path: Optional[Tuple[bytearray]] = None
+    path: Tuple[bytearray] = tuple()
 
     def __iter__(self):
         return iter(astuple(self))
@@ -127,19 +127,29 @@ class FlightServer(flight.FlightServerBase):
         print(self.flights[key])
 
         # plasma memory
-        # object_id = key[0]
-        # if isinstance(data, pyarrow.Table):
-        #     print("table not supported by plasma")
-        #     batches: List[pyarrow.RecordBatch] = data.to_batches()
-        # elif isinstance(data, str):
-        #     self.plasma_client.put(data, object_id)
-        # elif isinstance(data, pyarrow.Tensor):
-        #     data_size = pyarrow.ipc.get_tensor_size(data)
-        #     buffer: memoryview = self.plasma_client.create(object_id, data_size)
-        #     stream = pyarrow.FixedSizeBufferWriter(buffer)
-        #     pyarrow.ipc.write_tensor(data, stream)
-        #     self.plasma_client.seal(object_id)
-        #     print(self.plasma_client.get(object_id))
+        print(key.path[0].decode('utf-8'))
+        object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))
+        if isinstance(data, pyarrow.Table):
+            record_batch: pyarrow.RecordBatch = pyarrow.RecordBatch.from_pandas(data.to_pandas())
+            mock_sink = pyarrow.MockOutputStream()
+            stream_writer = pyarrow.RecordBatchStreamWriter(mock_sink, record_batch.schema)
+            stream_writer.write_batch(record_batch)
+            stream_writer.close()
+            data_size = mock_sink.size()
+            buf = self.plasma_client.create(object_id, data_size)
+            stream = pyarrow.FixedSizeBufferWriter(buf)
+            stream_writer = pyarrow.RecordBatchStreamWriter(stream, record_batch.schema)
+            stream_writer.write_batch(record_batch)
+            stream_writer.close()
+        elif isinstance(data, str):
+            self.plasma_client.put(data, object_id)
+        elif isinstance(data, pyarrow.Tensor):
+            data_size = pyarrow.ipc.get_tensor_size(data)
+            buffer: memoryview = self.plasma_client.create(object_id, data_size)
+            stream = pyarrow.FixedSizeBufferWriter(buffer)
+            pyarrow.ipc.write_tensor(data, stream)
+            self.plasma_client.seal(object_id)
+            print(self.plasma_client.get(object_id))
 
     def do_get(self, context, ticket: flight.Ticket):
         key = ast.literal_eval(ticket.ticket.decode())
