@@ -73,14 +73,18 @@ def do_action(args, client, connection_args={}):
     except pyarrow.lib.ArrowIOError as e:
         print("Error calling action:", e)
 
-
-def generate_sha1_object_id(path: bytearray) -> pyarrow.plasma.ObjectID:
+def generate_sha1_object_id(path: str) -> pyarrow.plasma.ObjectID:
     m = hashlib.sha1()
     m.update(path)
+
     id = m.digest()[0:20]
+    print("sha1", id)
     return pyarrow.plasma.ObjectID(id)
 
+<<<<<<< HEAD
+=======
 
+>>>>>>> broken
 def push_data(args, client, connection_args={}):
     if args.file is not None:
         print('File Name:', args.file)
@@ -89,14 +93,21 @@ def push_data(args, client, connection_args={}):
         df = my_table.to_pandas()
         print(df.head())
 
-        object_id = generate_sha1_object_id(args.file.encode('utf-8'))
-        print("sha1", object_id)
+<<<<<<< HEAD
+        generate_sha1_object_id(args.file.encode('utf-8'))
+=======
+        #generate_sha1_object_id(args.file.encode('utf-8'))
+>>>>>>> broken
         writer, _ = client.do_put(
             pyarrow.flight.FlightDescriptor.for_path(args.file), my_table.schema)
         writer.write_table(my_table)
         writer.close()
     else:
+<<<<<<< HEAD
+        print('unknown data type')
+=======
         print('unknown put data type')
+>>>>>>> broken
 
 
 def get_flight(args, client, connection_args={}):
@@ -132,7 +143,7 @@ def _add_common_arguments(parser):
 def main():
 
     client = pyarrow.plasma.connect("/tmp/plasma")
-    #client.put("hello world")
+    client.put("hello world")
     print(client.list())
 
     parser = argparse.ArgumentParser()
