@@ -17,7 +17,7 @@
 
 """An example Flight Python server."""
 
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 from overrides import overrides
 from dataclasses import dataclass
 
@@ -52,10 +52,10 @@ class FlightServer(flight.FlightServerBase):
         self.tls_certificates = tls_certificates
 
         # populate flights with existing plasma store
-        store = self.plasma_client.list()
-        for key, value in store.items():
-            print("key", key)
-            print("value", value)
+        # store = self.plasma_client.list()
+        # for key, value in store.items():
+        #     print("key", key)
+        #     print("value", value)
         #self.flights[key] = table
 
 
@@ -64,7 +64,7 @@ class FlightServer(flight.FlightServerBase):
 
     @classmethod
     def descriptor_to_key(self, descriptor) -> FlightKey:
-        return (descriptor.descriptor_type.value, descriptor.command,
+        return FlightKey(descriptor.descriptor_type.value, descriptor.command,
                 tuple(descriptor.path or tuple()))
 
     def _make_flight_info(self, key, descriptor: flight.FlightDescriptor, table: pyarrow.Table) -> flight.FlightInfo:
@@ -101,7 +101,8 @@ class FlightServer(flight.FlightServerBase):
         print("plasma", self.plasma_client.list())
         key = FlightServer.descriptor_to_key(descriptor)
         if key in self.flights:
-            table = self.flights[key]
+            #table = self.flights[key]
+            table = self.plasma_client.get(key.path)
             return self._make_flight_info(key, descriptor, table)
         raise KeyError('Flight not found.')
 
@@ -109,8 +110,26 @@ class FlightServer(flight.FlightServerBase):
         print("descriptor", descriptor)
         key = FlightServer.descriptor_to_key(descriptor)
         print("Key", key)
-        self.flights[key] = reader.read_all()
+        data = reader.read_all()
+        
+        #flight memory
+        self.flights[key] = data
         print(self.flights[key])
+
+        # plasma memory
+        # object_id = key[0]
+        # if isinstance(data, pyarrow.Table):
+        #     print("table not supported by plasma")
+        #     batches: List[pyarrow.RecordBatch] = data.to_batches()
+        # elif isinstance(data, str):
+        #     self.plasma_client.put(data, object_id)
+        # elif isinstance(data, pyarrow.Tensor):
+        #     data_size = pyarrow.ipc.get_tensor_size(data)
+        #     buffer: memoryview = self.plasma_client.create(object_id, data_size)
+        #     stream = pyarrow.FixedSizeBufferWriter(buffer)
+        #     pyarrow.ipc.write_tensor(data, stream)
+        #     self.plasma_client.seal(object_id)
+        #     print(self.plasma_client.get(object_id))
 
     def do_get(self, context, ticket: flight.Ticket):
         key = ast.literal_eval(ticket.ticket.decode())

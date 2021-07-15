@@ -20,6 +20,8 @@
 import argparse
 import sys
 
+import hashlib
+
 import pyarrow
 import pyarrow.flight
 import pyarrow.csv as csv
@@ -71,6 +73,14 @@ def do_action(args, client, connection_args={}):
     except pyarrow.lib.ArrowIOError as e:
         print("Error calling action:", e)
 
+def generate_sha1_object_id(path: str) -> pyarrow.plasma.ObjectID:
+    m = hashlib.sha1()
+    m.update(path)
+
+    id = m.digest()[0:20]
+    print("sha1", id)
+    return pyarrow.plasma.ObjectID(id)
+
 
 def push_data(args, client, connection_args={}):
     if args.file is not None:
@@ -79,6 +89,8 @@ def push_data(args, client, connection_args={}):
         print('Table rows=', str(len(my_table)))
         df = my_table.to_pandas()
         print(df.head())
+
+        #generate_sha1_object_id(args.file.encode('utf-8'))
         writer, _ = client.do_put(
             pyarrow.flight.FlightDescriptor.for_path(args.file), my_table.schema)
         writer.write_table(my_table)
