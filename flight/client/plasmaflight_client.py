@@ -90,7 +90,6 @@ def push_data(args, client, connection_args={}):
         print(df.head())
 
         object_id = generate_sha1_object_id(args.file.encode('utf-8'))
-        print("sha1", object_id)
         writer, _ = client.do_put(
             pyarrow.flight.FlightDescriptor.for_path(object_id.binary().hex()), my_table.schema)
         writer.write_table(my_table)

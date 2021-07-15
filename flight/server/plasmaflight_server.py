@@ -32,18 +32,22 @@ import pyarrow.flight as flight
 import pyarrow.plasma as plasma
 
 
-@dataclass(frozen=True)
+@dataclass(unsafe_hash=True)
 class FlightKey:
     descriptor_type: int = flight.DescriptorType.UNKNOWN.value
     command: Optional[str] = None
     path: Tuple[bytearray] = tuple()
+
+    def __init__(self, descriptor_type, command, path):
+        self.descriptor_type = descriptor_type
+        self.command = command
+        self.path = path
 
     def __iter__(self):
         return iter(astuple(self))
 
     def __getitem__(self, item):
         return getattr(self, item)
-
 
 class FlightServer(flight.FlightServerBase):
     def __init__(self, host="localhost", location:str=None,
@@ -116,12 +120,10 @@ class FlightServer(flight.FlightServerBase):
             return self._make_flight_info(key, descriptor, table)
         raise KeyError('Flight not found.')
 
-    def do_put(self, context, descriptor: flight.FlightDescriptor, reader, writer):
-        print("descriptor", descriptor)
+    def do_put(self, context, descriptor: flight.FlightDescriptor, reader: flight.MetadataRecordBatchReader, writer: flight.MetadataRecordBatchWriter):
         key = FlightServer.descriptor_to_key(descriptor)
-        print("Key", key)
         data = reader.read_all()
-        
+
         #flight memory
         self.flights[key] = data
         print(self.flights[key])
@@ -129,7 +131,26 @@ class FlightServer(flight.FlightServerBase):
         # plasma memory
         print(key.path[0].decode('utf-8'))
         object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))
+        
+        
+        data = "hello world"
+        if isinstance(data, str) or isinstance(data, int):
+            self.plasma_client.put(data, object_id)
+        elif isinstance(data, pyarrow.Tensor):
+            data_size = pyarrow.ipc.get_tensor_size(data)
+            buffer: memoryview = self.plasma_client.create(object_id, data_size)
+            stream = pyarrow.FixedSizeBufferWriter(buffer)
+            pyarrow.ipc.write_tensor(data, stream)
+            self.plasma_client.seal(object_id)
         if isinstance(data, pyarrow.Table):
+            # TODO: calculate table size?
+            # buf = self.plasma_client.create(object_id, data.nbytes * data.num_rows * data.num_columns)
+            # stream = pyarrow.FixedSizeBufferWriter(buf)
+            # stream_writer = pyarrow.RecordBatchStreamWriter(stream, data.schema)
+            # stream_writer.write_table(data)
+            # stream_writer.close()
+
+            # Single Record Batch
             record_batch: pyarrow.RecordBatch = pyarrow.RecordBatch.from_pandas(data.to_pandas())
             mock_sink = pyarrow.MockOutputStream()
             stream_writer = pyarrow.RecordBatchStreamWriter(mock_sink, record_batch.schema)
@@ -141,21 +162,26 @@ class FlightServer(flight.FlightServerBase):
             stream_writer = pyarrow.RecordBatchStreamWriter(stream, record_batch.schema)
             stream_writer.write_batch(record_batch)
             stream_writer.close()
-        elif isinstance(data, str):
-            self.plasma_client.put(data, object_id)
-        elif isinstance(data, pyarrow.Tensor):
-            data_size = pyarrow.ipc.get_tensor_size(data)
-            buffer: memoryview = self.plasma_client.create(object_id, data_size)
-            stream = pyarrow.FixedSizeBufferWriter(buffer)
-            pyarrow.ipc.write_tensor(data, stream)
             self.plasma_client.seal(object_id)
-            print(self.plasma_client.get(object_id))
+
+        #print("plasma", self.plasma_client.get(object_id))
 
     def do_get(self, context, ticket: flight.Ticket):
-        key = ast.literal_eval(ticket.ticket.decode())
+        # TODO: literal eval does not work with dataclass
+        # key = ast.literal_eval(ticket.ticket.decode())
+        key = eval(ticket.ticket.decode())
+
+       # plasma memory
+        object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))
+        print(self.plasma_client.get(object_id))
+        #return flight.RecordBatchStream(self.plasma_client.get(object_id))
+
+        # in memory
         if key not in self.flights:
-            return None
+             return None
         return flight.RecordBatchStream(self.flights[key])
+        
+ 
 
     def list_actions(self, context):
         return [
