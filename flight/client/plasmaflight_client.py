@@ -20,6 +20,8 @@
 import argparse
 import sys
 
+import hashlib
+
 import pyarrow
 import pyarrow.flight
 import pyarrow.csv as csv
@@ -71,17 +73,29 @@ def do_action(args, client, connection_args={}):
     except pyarrow.lib.ArrowIOError as e:
         print("Error calling action:", e)
 
+def generate_sha1_object_id(path: str) -> pyarrow.plasma.ObjectID:
+    m = hashlib.sha1()
+    m.update(path)
+
+    id = m.digest()[0:20]
+    print("sha1", id)
+    return pyarrow.plasma.ObjectID(id)
 
 def push_data(args, client, connection_args={}):
-    print('File Name:', args.file)
-    my_table = csv.read_csv(args.file)
-    print('Table rows=', str(len(my_table)))
-    df = my_table.to_pandas()
-    print(df.head())
-    writer, _ = client.do_put(
-        pyarrow.flight.FlightDescriptor.for_path(args.file), my_table.schema)
-    writer.write_table(my_table)
-    writer.close()
+    if args.file is not None:
+        print('File Name:', args.file)
+        my_table = csv.read_csv(args.file)
+        print('Table rows=', str(len(my_table)))
+        df = my_table.to_pandas()
+        print(df.head())
+
+        generate_sha1_object_id(args.file.encode('utf-8'))
+        writer, _ = client.do_put(
+            pyarrow.flight.FlightDescriptor.for_path(args.file), my_table.schema)
+        writer.write_table(my_table)
+        writer.close()
+    else:
+        print('unknown data type')
 
 
 def get_flight(args, client, connection_args={}):
