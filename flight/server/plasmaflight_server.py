@@ -17,10 +17,11 @@
 
 """An example Flight Python server."""
 
-from typing import Dict, Tuple, Optional, List
+from typing import Any, Dict, Tuple, Optional, List
 from overrides import overrides
 from dataclasses import dataclass, astuple
 
+import sys
 import subprocess
 import argparse
 import ast
@@ -107,10 +108,10 @@ class FlightServer(flight.FlightServerBase):
         super(FlightServer, self).__init__(
             location, auth_handler, tls_certificates, verify_client,
             root_certificates)
+        self.host = host
         #self.plasma_server = subprocess.Popen(["plasma_store", "-m", "10000000", "-s", "/tmp/plasma"])#, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.plasma_client = plasma.connect("/tmp/plasma")
-        self.flights: Dict[FlightKey, pyarrow.Table] = {}
-        self.host = host
+        self.flights: Dict[FlightKey, plasma.ObjectID] = {}
         self.tls_certificates = tls_certificates
 
         # populate flights with existing plasma store
@@ -132,7 +133,11 @@ class FlightServer(flight.FlightServerBase):
             tuple(descriptor.path or tuple())
         )
 
-    def _make_flight_info(self, key, descriptor: flight.FlightDescriptor, table: pyarrow.Table) -> flight.FlightInfo:
+    def _make_flight_table_info(self, key: FlightKey, descriptor: flight.FlightDescriptor, table: pyarrow.Table) -> flight.FlightInfo:
+        """
+        Creates a flight ticket for a table. The flight client will receive
+        the table schema and number of rows.
+        """
         if self.tls_certificates:
             location = flight.Location.for_grpc_tls(
                 self.host, self.port)
@@ -152,37 +157,57 @@ class FlightServer(flight.FlightServerBase):
                                          descriptor, endpoints,
                                          table.num_rows, data_size)
 
+    def _make_flight_unknown_plasma_info(self, key: FlightKey, descriptor: flight.FlightDescriptor, data: plasma.ObjectID) -> flight.FlightInfo:
+        """
+        Creates a flight ticket of unknown plasma data. The flight client is required
+        to manage the typings of the flight object.
+        """
+        if self.tls_certificates:
+            location = flight.Location.for_grpc_tls(
+                self.host, self.port)
+        else:
+            location = flight.Location.for_grpc_tcp(
+                self.host, self.port)
+        endpoints = [flight.FlightEndpoint(repr(key), [location]), ]
+        data_size = self.plasma_client.list()[data]['data_size']
+        return flight.FlightInfo(pyarrow.schema([('data', pyarrow.null())]), descriptor, endpoints, 1, data_size)
+
+    def _make_flight_info(self, key: FlightKey, descriptor: flight.FlightDescriptor, data: Any) -> flight.FlightInfo:
+        if isinstance(data, pyarrow.Table):
+            return self._make_flight_table_info(key, descriptor, data)
+        elif isinstance(data, plasma.ObjectID):
+            return self._make_flight_unknown_plasma_info(key, descriptor, data)
+        else:
+            raise Exception("unknown flight object")
+
     def list_flights(self, context, criteria) -> flight.FlightInfo:
-        for key, table in self.flights.items():
+        for key, object_id in self.flights.items():
             if key.command is not None:
                 descriptor = \
                     flight.FlightDescriptor.for_command(key.command)
             else:
                 descriptor = flight.FlightDescriptor.for_path(*key.path)
 
-            yield self._make_flight_info(key, descriptor, table)
+            yield self._make_flight_info(key, descriptor, object_id)
 
     def get_flight_info(self, context, descriptor: flight.FlightDescriptor):
         print("plasma", self.plasma_client.list())
         key = FlightServer.descriptor_to_key(descriptor)
         if key in self.flights:
-            table = self.flights[key]
-            # TODO: table = self.plasma_client.get(key.path)
-            return self._make_flight_info(key, descriptor, table)
+            object_id = self.flights[key]
+            # TODO: check plasma_id exists: table = self.plasma_client.get(key.path)
+            return self._make_flight_info(key, descriptor, object_id)
         raise KeyError('Flight not found.')
 
     def do_put(self, context, descriptor: flight.FlightDescriptor, reader: flight.MetadataRecordBatchReader, writer: flight.MetadataRecordBatchWriter):
         key = FlightServer.descriptor_to_key(descriptor)
         data = reader.read_all()
+        print(type(data))
 
-        #flight memory
-        self.flights[key] = data
-        print(self.flights[key])
-
-        # plasma memory
+        # move to plasma store
         print(key.path[0].decode('utf-8'))
         object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))
-        
+        self.flights[key] = object_id
         
         if isinstance(data, str) or isinstance(data, int):
             self.plasma_client.put(data, object_id)
@@ -205,13 +230,6 @@ class FlightServer(flight.FlightServerBase):
         # convert back to table
         table = pyarrow.Table.from_pandas(PlasmaUtils.get_dataframe(self.plasma_client, object_id))
         return flight.RecordBatchStream(table)
-
-        # in memory
-        #if key not in self.flights:
-        #     return None
-        #return flight.RecordBatchStream(self.flights[key])
-        
- 
 
     def list_actions(self, context):
         return [

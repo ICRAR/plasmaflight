@@ -2,9 +2,10 @@
 from dataclasses import make_dataclass
 import subprocess as sp
 import unittest
+from io import BytesIO
 
 import pandas
-
+import numpy as np
 import pyarrow
 import pyarrow.plasma as plasma
 
@@ -46,3 +47,22 @@ class TestPlasma(unittest.TestCase):
 
     def test_pyarrow_table(self):
         pass
+
+    def test_ndarray_raw(self):
+        a = np.array([[1,2],[3,4]])
+        assert(a.data.tobytes() == a.tobytes())
+        abytes = a.tobytes()
+
+        b = np.frombuffer(abytes, dtype=a.dtype).reshape(2,2)
+        assert(np.array_equal(a, b))
+    
+    def test_ndarray_bytesio(self):
+        a = np.array([[1,2],[3,4]])
+        np_bytes = BytesIO()
+        np.save(np_bytes, a, allow_pickle=True)
+        abytes = np_bytes.getvalue()
+
+        load_bytes = BytesIO(abytes)
+        b = np.load(load_bytes, allow_pickle=True)
+        assert(np.array_equal(a,b))
+

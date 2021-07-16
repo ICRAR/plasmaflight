@@ -21,7 +21,10 @@ import argparse
 import sys
 
 import hashlib
+from io import BytesIO
 
+import numpy as np
+from pandas.core.frame import DataFrame
 import pyarrow
 import pyarrow.flight
 import pyarrow.csv as csv
@@ -81,7 +84,7 @@ def generate_sha1_object_id(path: bytearray) -> pyarrow.plasma.ObjectID:
     return pyarrow.plasma.ObjectID(id)
 
 
-def push_data(args, client, connection_args={}):
+def push_df(args, client, connection_args={}):
     if args.file is not None:
         print('File Name:', args.file)
         my_table = csv.read_csv(args.file)
@@ -96,7 +99,52 @@ def push_data(args, client, connection_args={}):
         writer.close()
     else:
         print('unknown put data type')
+    
+def push_string(args, client, connection_args={}):
+    if args.file is not None:
+        print('string:', args.file)
 
+        my_tensor = pyarrow.Tensor.from_numpy(np.loadtxt(args.file, delimiter=" "))
+        print('Tensor shape=', my_tensor.shape)
+
+        object_id = generate_sha1_object_id(args.file.encode('utf-8'))
+        #my_table = pyarrow.record_batch([[my_tensor]], pyarrow.schema([('data', pyarrow.binary(8))]))
+
+        data = "hello world"
+        my_table = pyarrow.record_batch([[data]], pyarrow.schema([('data', pyarrow.string())]))
+        writer, _ = client.do_put(
+            pyarrow.flight.FlightDescriptor.for_path(object_id.binary().hex()), pyarrow.schema([('data', pyarrow.string())]))
+        print(type(writer))
+        writer.write(my_table)
+        writer.close()
+    else:
+        print('unknown put data type')
+
+def push_tensor(args, client, connection_args={}):
+    if args.file is not None:
+        print('File Name:', args.file)
+
+        my_tensor = pyarrow.Tensor.from_numpy(np.loadtxt(args.file, delimiter=" "))
+        print('Tensor shape=', my_tensor.shape)
+
+        object_id = generate_sha1_object_id(args.file.encode('utf-8'))
+        #my_table = pyarrow.record_batch([[my_tensor]], pyarrow.schema([('data', pyarrow.binary(8))]))
+
+        data = BytesIO()
+        np.save(data, my_tensor.to_numpy())
+        buffer = data.getbuffer()
+        wrapper_table = pyarrow.record_batch([[buffer]], pyarrow.schema([('data', pyarrow.binary(buffer.nbytes))]))
+        writer, _ = client.do_put(
+            pyarrow.flight.FlightDescriptor.for_path(object_id.binary().hex()), pyarrow.schema([('data', pyarrow.binary(buffer.nbytes))]))
+        writer.write(wrapper_table)
+        writer.close()
+    else:
+        print('unknown put data type')
+
+def push_bytesio(args, client, connection_args={}):
+    """
+    Pushes a streamable BytesIO object wrapped in a table to the flight server. 
+    """
 
 def get_flight(args, client, connection_args={}):
     if args.path:
@@ -114,7 +162,24 @@ def get_flight(args, client, connection_args={}):
             reader = get_client.do_get(endpoint.ticket)
             df = reader.read_pandas()
             print(df)
+    
+def get_tensor(args, client, connection_args={}):
+    if args.path:
+        descriptor = pyarrow.flight.FlightDescriptor.for_path(*args.path)
+    else:
+        descriptor = pyarrow.flight.FlightDescriptor.for_command(args.command)
 
+    info = client.get_flight_info(descriptor)
+    for endpoint in info.endpoints:
+        print('Ticket:', endpoint.ticket)
+        for location in endpoint.locations:
+            print(location)
+            get_client = pyarrow.flight.FlightClient(location,
+                                                     **connection_args)
+            reader: pyarrow.flight.FlightStreamReader = get_client.do_get(endpoint.ticket)
+
+            bytes = reader.read_all()["data"][0].as_py()
+            print(np.load(BytesIO(bytes)))
 
 def _add_common_arguments(parser):
     parser.add_argument('--tls', action='store_true',
@@ -130,9 +195,9 @@ def _add_common_arguments(parser):
 
 def main():
 
-    client = pyarrow.plasma.connect("/tmp/plasma")
+    #client = pyarrow.plasma.connect("/tmp/plasma")
     #client.put("hello world")
-    print(client.list())
+    #print(client.list())
 
     parser = argparse.ArgumentParser()
     subcommands = parser.add_subparsers()
@@ -149,14 +214,29 @@ def main():
     cmd_do.add_argument('action_type', type=str,
                         help="The action type to run.")
 
-    cmd_put = subcommands.add_parser('put')
-    cmd_put.set_defaults(action='put')
+    cmd_put = subcommands.add_parser('put_df')
+    cmd_put.set_defaults(action='put_df')
+    _add_common_arguments(cmd_put)
+    cmd_put.add_argument('file', type=str,
+                         help="CSV file to upload.")
+
+    cmd_put = subcommands.add_parser('put_tensor')
+    cmd_put.set_defaults(action='put_tensor')
     _add_common_arguments(cmd_put)
     cmd_put.add_argument('file', type=str,
                          help="CSV file to upload.")
 
     cmd_get = subcommands.add_parser('get')
     cmd_get.set_defaults(action='get')
+    _add_common_arguments(cmd_get)
+    cmd_get_descriptor = cmd_get.add_mutually_exclusive_group(required=True)
+    cmd_get_descriptor.add_argument('-p', '--path', type=str, action='append',
+                                    help="The path for the descriptor.")
+    cmd_get_descriptor.add_argument('-c', '--command', type=str,
+                                    help="The command for the descriptor.")
+
+    cmd_get = subcommands.add_parser('get_tensor')
+    cmd_get.set_defaults(action='get_tensor')
     _add_common_arguments(cmd_get)
     cmd_get_descriptor = cmd_get.add_mutually_exclusive_group(required=True)
     cmd_get_descriptor.add_argument('-p', '--path', type=str, action='append',
@@ -173,7 +253,9 @@ def main():
         'list': list_flights,
         'do': do_action,
         'get': get_flight,
-        'put': push_data,
+        'get_tensor': get_tensor,
+        'put_df': push_df,
+        'put_tensor': push_tensor,
     }
     host, port = args.host.split(':')
     port = int(port)
