@@ -26,18 +26,18 @@ from io import BytesIO
 import numpy as np
 from pandas.core.frame import DataFrame
 import pyarrow
-import pyarrow.flight
+import pyarrow.flight as flight
+import pyarrow.plasma as plasma
 import pyarrow.csv as csv
-import pyarrow.plasma
 
 
-def list_flights(args, client: pyarrow.flight.FlightClient, connection_args={}):
+def list_flights(args, client: flight.FlightClient, connection_args={}):
     print('Flights\n=======')
     for flight in client.list_flights():
         descriptor = flight.descriptor
-        if descriptor.descriptor_type == pyarrow.flight.DescriptorType.PATH:
+        if descriptor.descriptor_type == flight.DescriptorType.PATH:
             print("Path:", descriptor.path)
-        elif descriptor.descriptor_type == pyarrow.flight.DescriptorType.CMD:
+        elif descriptor.descriptor_type == flight.DescriptorType.CMD:
             print("Command:", descriptor.command)
         else:
             print("Unknown descriptor type")
@@ -69,7 +69,7 @@ def list_flights(args, client: pyarrow.flight.FlightClient, connection_args={}):
 def do_action(args, client, connection_args={}):
     try:
         buf = pyarrow.allocate_buffer(0)
-        action = pyarrow.flight.Action(args.action_type, buf)
+        action = flight.Action(args.action_type, buf)
         print('Running action', args.action_type)
         for result in client.do_action(action):
             print("Got result", result.body.to_pybytes())
@@ -77,11 +77,11 @@ def do_action(args, client, connection_args={}):
         print("Error calling action:", e)
 
 
-def generate_sha1_object_id(path: bytearray) -> pyarrow.plasma.ObjectID:
+def generate_sha1_object_id(path: bytearray) -> plasma.ObjectID:
     m = hashlib.sha1()
     m.update(path)
     id = m.digest()[0:20]
-    return pyarrow.plasma.ObjectID(id)
+    return plasma.ObjectID(id)
 
 
 def push_df(args, client, connection_args={}):
@@ -94,7 +94,7 @@ def push_df(args, client, connection_args={}):
 
         object_id = generate_sha1_object_id(args.file.encode('utf-8'))
         writer, _ = client.do_put(
-            pyarrow.flight.FlightDescriptor.for_path(object_id.binary().hex()), my_table.schema)
+            flight.FlightDescriptor.for_path(object_id.binary().hex()), my_table.schema)
         writer.write_table(my_table)
         writer.close()
     else:
@@ -104,16 +104,13 @@ def push_string(args, client, connection_args={}):
     if args.file is not None:
         print('string:', args.file)
 
-        my_tensor = pyarrow.Tensor.from_numpy(np.loadtxt(args.file, delimiter=" "))
-        print('Tensor shape=', my_tensor.shape)
-
         object_id = generate_sha1_object_id(args.file.encode('utf-8'))
-        #my_table = pyarrow.record_batch([[my_tensor]], pyarrow.schema([('data', pyarrow.binary(8))]))
-
-        data = "hello world"
+        data = args.file
         my_table = pyarrow.record_batch([[data]], pyarrow.schema([('data', pyarrow.string())]))
         writer, _ = client.do_put(
-            pyarrow.flight.FlightDescriptor.for_path(object_id.binary().hex()), pyarrow.schema([('data', pyarrow.string())]))
+            flight.FlightDescriptor.for_path(
+                object_id.binary().hex()),
+                pyarrow.schema([('data', pyarrow.string())]))
         print(type(writer))
         writer.write(my_table)
         writer.close()
@@ -128,14 +125,13 @@ def push_tensor(args, client, connection_args={}):
         print('Tensor shape=', my_tensor.shape)
 
         object_id = generate_sha1_object_id(args.file.encode('utf-8'))
-        #my_table = pyarrow.record_batch([[my_tensor]], pyarrow.schema([('data', pyarrow.binary(8))]))
-
         data = BytesIO()
         np.save(data, my_tensor.to_numpy())
         buffer = data.getbuffer()
-        wrapper_table = pyarrow.record_batch([[buffer]], pyarrow.schema([('data', pyarrow.binary(buffer.nbytes))]))
+        schema = pyarrow.schema([('data', pyarrow.binary(buffer.nbytes))])
+        wrapper_table = pyarrow.record_batch([[buffer]], schema)
         writer, _ = client.do_put(
-            pyarrow.flight.FlightDescriptor.for_path(object_id.binary().hex()), pyarrow.schema([('data', pyarrow.binary(buffer.nbytes))]))
+            flight.FlightDescriptor.for_path(object_id.binary().hex()), schema)
         writer.write(wrapper_table)
         writer.close()
     else:
@@ -146,35 +142,37 @@ def push_bytesio(args, client, connection_args={}):
     Pushes a streamable BytesIO object wrapped in a table to the flight server. 
     """
 
-def get_flight(args, client, connection_args={}) -> pyarrow.flight.FlightStreamReader:
+def get_flight(args, client, connection_args={}) -> flight.FlightStreamReader:
+    """Invoked via RPC call by the flight client
+    """
     if args.path:
-        descriptor = pyarrow.flight.FlightDescriptor.for_path(*args.path)
+        descriptor = flight.FlightDescriptor.for_path(*args.path)
     else:
-        descriptor = pyarrow.flight.FlightDescriptor.for_command(args.command)
+        descriptor = flight.FlightDescriptor.for_command(args.command)
 
     info = client.get_flight_info(descriptor)
     for endpoint in info.endpoints:
         print('Ticket:', endpoint.ticket)
         for location in endpoint.locations:
             print(location)
-            get_client = pyarrow.flight.FlightClient(location,
+            get_client = flight.FlightClient(location,
                                                      **connection_args)
             return get_client.do_get(endpoint.ticket)
     
 # def get_tensor(args, client, connection_args={}):
 #     if args.path:
-#         descriptor = pyarrow.flight.FlightDescriptor.for_path(*args.path)
+#         descriptor = flight.FlightDescriptor.for_path(*args.path)
 #     else:
-#         descriptor = pyarrow.flight.FlightDescriptor.for_command(args.command)
+#         descriptor = flight.FlightDescriptor.for_command(args.command)
 
 #     info = client.get_flight_info(descriptor)
 #     for endpoint in info.endpoints:
 #         print('Ticket:', endpoint.ticket)
 #         for location in endpoint.locations:
 #             print(location)
-#             get_client = pyarrow.flight.FlightClient(location,
+#             get_client = flight.FlightClient(location,
 #                                                      **connection_args)
-#             reader: pyarrow.flight.FlightStreamReader = get_client.do_get(endpoint.ticket)
+#             reader: flight.FlightStreamReader = get_client.do_get(endpoint.ticket)
 
 #             bytes = reader.read_all()["data"][0].as_py()
 #             print(np.load(BytesIO(bytes)))
@@ -184,9 +182,18 @@ def get_df(args, client, connection_args={}):
     df = reader.read_pandas()
     print(df)
 
+def get_string(args, client, connection_args={}):
+    reader = get_flight(args, client, connection_args)
+    table = reader.read_all()
+    assert(table.schema.field("data").type == pyarrow.string())
+    string = table["data"][0]
+    print(string)
+
 def get_tensor(args, client, connection_args={}):
     reader = get_flight(args, client, connection_args)
-    ndarray = np.load(BytesIO(reader.read_all()["data"][0].as_py()))
+    table = reader.read_all()
+    assert(table.schema.field("data").type == pyarrow.binary())
+    ndarray = np.load(BytesIO(table["data"][0].as_py()))
     print(ndarray)
 
 def _add_common_arguments(parser):
@@ -203,7 +210,7 @@ def _add_common_arguments(parser):
 
 def main():
 
-    #client = pyarrow.plasma.connect("/tmp/plasma")
+    #client = plasma.connect("/tmp/plasma")
     #client.put("hello world")
     #print(client.list())
 
@@ -228,6 +235,12 @@ def main():
     cmd_put.add_argument('file', type=str,
                          help="CSV file to upload.")
 
+    cmd_put = subcommands.add_parser('put_string')
+    cmd_put.set_defaults(action='put_string')
+    _add_common_arguments(cmd_put)
+    cmd_put.add_argument('file', type=str,
+                         help="CSV file to upload.")
+
     cmd_put = subcommands.add_parser('put_tensor')
     cmd_put.set_defaults(action='put_tensor')
     _add_common_arguments(cmd_put)
@@ -236,6 +249,15 @@ def main():
 
     cmd_get = subcommands.add_parser('get')
     cmd_get.set_defaults(action='get')
+    _add_common_arguments(cmd_get)
+    cmd_get_descriptor = cmd_get.add_mutually_exclusive_group(required=True)
+    cmd_get_descriptor.add_argument('-p', '--path', type=str, action='append',
+                                    help="The path for the descriptor.")
+    cmd_get_descriptor.add_argument('-c', '--command', type=str,
+                                    help="The command for the descriptor.")
+
+    cmd_get = subcommands.add_parser('get_string')
+    cmd_get.set_defaults(action='get_string')
     _add_common_arguments(cmd_get)
     cmd_get_descriptor = cmd_get.add_mutually_exclusive_group(required=True)
     cmd_get_descriptor.add_argument('-p', '--path', type=str, action='append',
@@ -261,7 +283,9 @@ def main():
         'list': list_flights,
         'do': do_action,
         'get': get_df,
+        'get_string': get_string,
         'get_tensor': get_tensor,
+        'put_string': push_string,
         'put_df': push_df,
         'put_tensor': push_tensor,
     }
@@ -281,12 +305,12 @@ def main():
             tls_private_key = key_file.read()
         connection_args["cert_chain"] = tls_cert_chain
         connection_args["private_key"] = tls_private_key
-    client = pyarrow.flight.FlightClient(f"{scheme}://{host}:{port}",
+    client = flight.FlightClient(f"{scheme}://{host}:{port}",
                                          **connection_args)
     while True:
         try:
-            action = pyarrow.flight.Action("healthcheck", b"")
-            options = pyarrow.flight.FlightCallOptions(timeout=1)
+            action = flight.Action("healthcheck", b"")
+            options = flight.FlightCallOptions(timeout=1)
             list(client.do_action(action, options=options))
             break
         except pyarrow.ArrowIOError as e:
