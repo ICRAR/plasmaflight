@@ -209,7 +209,10 @@ class FlightServer(flight.FlightServerBase):
         object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))
         self.flights[key] = object_id
         
-        if isinstance(data, str) or isinstance(data, int):
+        if isinstance(data, pyarrow.Table) and data.shape == (1,1):
+            # store only the data of a unit table 
+            self.plasma_client.put(data["data"][0].as_buffer(), object_id)
+        elif isinstance(data, str) or isinstance(data, int):
             self.plasma_client.put(data, object_id)
         elif isinstance(data, pyarrow.Tensor):
             PlasmaUtils.put_tensor(self.plasma_client, data, object_id)

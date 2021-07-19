@@ -146,7 +146,7 @@ def push_bytesio(args, client, connection_args={}):
     Pushes a streamable BytesIO object wrapped in a table to the flight server. 
     """
 
-def get_flight(args, client, connection_args={}):
+def get_flight(args, client, connection_args={}) -> pyarrow.flight.FlightStreamReader:
     if args.path:
         descriptor = pyarrow.flight.FlightDescriptor.for_path(*args.path)
     else:
@@ -159,27 +159,35 @@ def get_flight(args, client, connection_args={}):
             print(location)
             get_client = pyarrow.flight.FlightClient(location,
                                                      **connection_args)
-            reader = get_client.do_get(endpoint.ticket)
-            df = reader.read_pandas()
-            print(df)
+            return get_client.do_get(endpoint.ticket)
     
+# def get_tensor(args, client, connection_args={}):
+#     if args.path:
+#         descriptor = pyarrow.flight.FlightDescriptor.for_path(*args.path)
+#     else:
+#         descriptor = pyarrow.flight.FlightDescriptor.for_command(args.command)
+
+#     info = client.get_flight_info(descriptor)
+#     for endpoint in info.endpoints:
+#         print('Ticket:', endpoint.ticket)
+#         for location in endpoint.locations:
+#             print(location)
+#             get_client = pyarrow.flight.FlightClient(location,
+#                                                      **connection_args)
+#             reader: pyarrow.flight.FlightStreamReader = get_client.do_get(endpoint.ticket)
+
+#             bytes = reader.read_all()["data"][0].as_py()
+#             print(np.load(BytesIO(bytes)))
+
+def get_df(args, client, connection_args={}):
+    reader = get_flight(args, client, connection_args)
+    df = reader.read_pandas()
+    print(df)
+
 def get_tensor(args, client, connection_args={}):
-    if args.path:
-        descriptor = pyarrow.flight.FlightDescriptor.for_path(*args.path)
-    else:
-        descriptor = pyarrow.flight.FlightDescriptor.for_command(args.command)
-
-    info = client.get_flight_info(descriptor)
-    for endpoint in info.endpoints:
-        print('Ticket:', endpoint.ticket)
-        for location in endpoint.locations:
-            print(location)
-            get_client = pyarrow.flight.FlightClient(location,
-                                                     **connection_args)
-            reader: pyarrow.flight.FlightStreamReader = get_client.do_get(endpoint.ticket)
-
-            bytes = reader.read_all()["data"][0].as_py()
-            print(np.load(BytesIO(bytes)))
+    reader = get_flight(args, client, connection_args)
+    ndarray = np.load(BytesIO(reader.read_all()["data"][0].as_py()))
+    print(ndarray)
 
 def _add_common_arguments(parser):
     parser.add_argument('--tls', action='store_true',
@@ -252,7 +260,7 @@ def main():
     commands = {
         'list': list_flights,
         'do': do_action,
-        'get': get_flight,
+        'get': get_df,
         'get_tensor': get_tensor,
         'put_df': push_df,
         'put_tensor': push_tensor,
