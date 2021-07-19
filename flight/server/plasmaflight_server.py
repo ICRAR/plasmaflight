@@ -154,7 +154,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
         #    print("no existing plasma store, creating ", self._socket)
         #    self.plasma_server = subprocess.Popen(["plasma_store", "-m", "10000000", "-s", "/tmp/plasma"])#, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         #    self.plasma_client = plasma.connect(self._socket, num_retries=10)
-        self.flights: Dict[FlightKey, plasma.ObjectID] = {}
+        self.flights: Dict[FlightKey, Tuple[plasma.ObjectID, pyarrow.DataType]] = {}
         self.tls_certificates = tls_certificates
 
         # populate flights with existing plasma store
@@ -164,7 +164,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
                 flight.DescriptorType.PATH.value,
                 None,
                 tuple([key.binary().hex().encode('ascii')]))
-            ] = key
+            ] = (key, pyarrow.binary())
 
     def __del__(self):
         #self.plasma_server.communicate()
@@ -217,7 +217,9 @@ class PlasmaFlightServer(flight.FlightServerBase):
                 self.host, self.port)
         endpoints = [flight.FlightEndpoint(repr(key), [location]), ]
         data_size = self.plasma_client.list()[data]['data_size']
-        return flight.FlightInfo(pyarrow.schema([('data', pyarrow.binary(length=data_size))]), descriptor, endpoints, 1, data_size)
+        return flight.FlightInfo(
+            pyarrow.schema([('data', pyarrow.binary(length=data_size))]),
+            descriptor, endpoints, 1, data_size)
 
     def _make_flight_info(self, key: FlightKey, descriptor: flight.FlightDescriptor, data: Any) -> flight.FlightInfo:
         if isinstance(data, pyarrow.Table):
@@ -241,22 +243,20 @@ class PlasmaFlightServer(flight.FlightServerBase):
     def get_flight_info(self, context, descriptor: flight.FlightDescriptor):
         key = PlasmaFlightServer.descriptor_to_key(descriptor)
         if key in self.flights:
-            if True: #self.plasma_client.contains(plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))):
+            if self.plasma_client.contains(plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))):
                 object_id = self.flights[key]
-                # TODO: check plasma_id exists: table = self.plasma_client.contains(key.path)
                 return self._make_flight_info(key, descriptor, object_id)
         raise KeyError('Flight not found.')
 
     def do_put(self, context, descriptor: flight.FlightDescriptor, reader: flight.MetadataRecordBatchReader, writer: flight.MetadataRecordBatchWriter):
         key = PlasmaFlightServer.descriptor_to_key(descriptor)
-        assert(key.descriptor_type == flight.DescriptorType.PATH.value)
+        assert key.descriptor_type == flight.DescriptorType.PATH.value
         data = reader.read_all()
         print(type(data))
         print(data.to_pandas())
 
         # move to plasma store
         object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))
-        self.flights[key] = object_id
         
         # if isinstance(data, pyarrow.Table) and data.shape == (1,1):
         #     # store only the data of a unit table 
@@ -267,23 +267,18 @@ class PlasmaFlightServer(flight.FlightServerBase):
         #     PlasmaUtils.put_tensor(self.plasma_client, data, object_id)
         # elif isinstance(data, pandas.DataFrame):
         #     PlasmaUtils.put_dataframe(self.plasma_client, data, object_id)
-        print(data["data"][0].as_buffer().size)
         if isinstance(data, pyarrow.Table) and isinstance(data["data"][0], pyarrow.FixedSizeBinaryScalar):
             print("inserting binary object")
             PlasmaUtils.put_memoryview(self.plasma_client, memoryview(data["data"][0].as_buffer()), object_id)
-
-            # test
-            buffer = PlasmaUtils.get_memoryview(self.plasma_client, object_id)
-            #ndarray = np.load(BytesIO(buffer.as_py()))
-            schema = pyarrow.schema([('data', pyarrow.binary(length=buffer.nbytes))])
-            wrapper = pyarrow.record_batch([[buffer]], schema)
-            print(wrapper)
-
+            datatype = pyarrow.FixedSizeBinaryScalar
         elif isinstance(data, pyarrow.Table):
             print("inserting pandas dataframe")
             PlasmaUtils.put_dataframe(self.plasma_client, data.to_pandas(), object_id)
+            datatype = pandas.DataFrame
         else:
             raise Exception("unrecognized data type")
+
+        self.flights[key] = (object_id, datatype) 
 
     def do_get(self, context, ticket: flight.Ticket) -> flight.RecordBatchStream:
         """Invoked via RPC by the flight client"""

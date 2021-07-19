@@ -30,6 +30,62 @@ import pyarrow.flight as paf
 import pyarrow.plasma as plasma
 import pyarrow.csv as csv
 
+class PlasmaFlightClient():
+    def __init__(self, host: str, port: int, scheme: str = "grpc+tcp", connection_args={}):
+        scheme = "grpc+tcp"
+        # if args.tls:
+        #     scheme = "grpc+tls"
+        #     if args.tls_roots:
+        #         with open(args.tls_roots, "rb") as root_certs:
+        #             connection_args["tls_root_certs"] = root_certs.read()
+        # if args.mtls:
+        #     with open(args.mtls[0], "rb") as cert_file:
+        #         tls_cert_chain = cert_file.read()
+        #     with open(args.mtls[1], "rb") as key_file:
+        #         tls_private_key = key_file.read()
+        #     connection_args["cert_chain"] = tls_cert_chain
+        #     connection_args["private_key"] = tls_private_key
+
+        self._flight_client = paf.FlightClient(
+            f"{scheme}://{host}:{port}", **connection_args)
+    
+    def list_flights(self):
+        for flight in client.list_flights():
+            descriptor = flight.descriptor
+            if descriptor.descriptor_type == paf.DescriptorType.PATH:
+                pass
+            elif descriptor.descriptor_type == paf.DescriptorType.CMD:
+                pass
+            else:
+                raise Exception("Unknown descriptor type")
+
+            print("Total records:", end=" ")
+            if flight.total_records >= 0:
+                print(flight.total_records)
+            else:
+                print("Unknown")
+
+            print("Total bytes:", end=" ")
+            if flight.total_bytes >= 0:
+                print(flight.total_bytes)
+            else:
+                print("Unknown")
+
+            print("Number of endpoints:", len(flight.endpoints))
+            print("Schema:")
+            print(flight.schema)
+            print('---')
+
+        print('\nActions\n=======')
+        for action in client.list_actions():
+            print("Type:", action.type)
+            print("Description:", action.description)
+            print('---')
+
+
+
+
+
 
 def list_flights(args, client: paf.FlightClient, connection_args={}):
     print('Flights\n=======')
@@ -89,10 +145,12 @@ def push_df(args, client, connection_args={}):
         print('File Name:', args.file)
         my_table = csv.read_csv(args.file)
         print('Table rows=', str(len(my_table)))
+        object_id = generate_sha1_object_id(args.file.encode('utf-8'))
+        print("storing at:", object_id)
+
         df = my_table.to_pandas()
         print(df.head())
 
-        object_id = generate_sha1_object_id(args.file.encode('utf-8'))
         writer, _ = client.do_put(
             paf.FlightDescriptor.for_path(object_id.binary().hex()), my_table.schema)
         writer.write_table(my_table)
@@ -103,8 +161,8 @@ def push_df(args, client, connection_args={}):
 def push_string(args, client, connection_args={}):
     if args.file is not None:
         print('string:', args.file)
-
         object_id = generate_sha1_object_id(args.file.encode('utf-8'))
+        print("storing at:", object_id)
         data = args.file
         my_table = pyarrow.record_batch([[data]], pyarrow.schema([('data', pyarrow.string())]))
         writer, _ = client.do_put(
@@ -123,8 +181,9 @@ def push_tensor(args, client, connection_args={}):
 
         my_tensor = pyarrow.Tensor.from_numpy(np.loadtxt(args.file, delimiter=" "))
         print('Tensor shape=', my_tensor.shape)
-
         object_id = generate_sha1_object_id(args.file.encode('utf-8'))
+        print("storing at:", object_id)
+
         data = BytesIO()
         np.save(data, my_tensor.to_numpy())
         buffer = data.getbuffer()
@@ -167,18 +226,14 @@ def get_df(args, client, connection_args={}):
 def get_string(args, client, connection_args={}):
     reader = get_flight(args, client, connection_args)
     table = reader.read_all()
-    assert(table.schema.field("data").type == pyarrow.string())
+    #assert table.schema.field("data").type == pyarrow.string()
     string = table["data"][0]
     print(string)
 
 def get_tensor(args, client, connection_args={}):
     reader = get_flight(args, client, connection_args)
     table = reader.read_all()
-
-    print(type(table.schema.field("data").type))
-    assert(type(table.schema.field("data").type) == pyarrow.FixedSizeBinaryType)
-    #assert(table.schema.field("data").type == pyarrow.binary())
-
+    #assert type(table.schema.field("data").type) == pyarrow.FixedSizeBinaryType
     ndarray = np.load(BytesIO(table["data"][0].as_py()))
     print(ndarray)
 
