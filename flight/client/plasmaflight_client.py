@@ -26,18 +26,18 @@ from io import BytesIO
 import numpy as np
 from pandas.core.frame import DataFrame
 import pyarrow
-import pyarrow.flight as flight
+import pyarrow.flight as paf
 import pyarrow.plasma as plasma
 import pyarrow.csv as csv
 
 
-def list_flights(args, client: flight.FlightClient, connection_args={}):
+def list_flights(args, client: paf.FlightClient, connection_args={}):
     print('Flights\n=======')
     for flight in client.list_flights():
         descriptor = flight.descriptor
-        if descriptor.descriptor_type == flight.DescriptorType.PATH:
+        if descriptor.descriptor_type == paf.DescriptorType.PATH:
             print("Path:", descriptor.path)
-        elif descriptor.descriptor_type == flight.DescriptorType.CMD:
+        elif descriptor.descriptor_type == paf.DescriptorType.CMD:
             print("Command:", descriptor.command)
         else:
             print("Unknown descriptor type")
@@ -69,7 +69,7 @@ def list_flights(args, client: flight.FlightClient, connection_args={}):
 def do_action(args, client, connection_args={}):
     try:
         buf = pyarrow.allocate_buffer(0)
-        action = flight.Action(args.action_type, buf)
+        action = paf.Action(args.action_type, buf)
         print('Running action', args.action_type)
         for result in client.do_action(action):
             print("Got result", result.body.to_pybytes())
@@ -94,7 +94,7 @@ def push_df(args, client, connection_args={}):
 
         object_id = generate_sha1_object_id(args.file.encode('utf-8'))
         writer, _ = client.do_put(
-            flight.FlightDescriptor.for_path(object_id.binary().hex()), my_table.schema)
+            paf.FlightDescriptor.for_path(object_id.binary().hex()), my_table.schema)
         writer.write_table(my_table)
         writer.close()
     else:
@@ -108,7 +108,7 @@ def push_string(args, client, connection_args={}):
         data = args.file
         my_table = pyarrow.record_batch([[data]], pyarrow.schema([('data', pyarrow.string())]))
         writer, _ = client.do_put(
-            flight.FlightDescriptor.for_path(
+            paf.FlightDescriptor.for_path(
                 object_id.binary().hex()),
                 pyarrow.schema([('data', pyarrow.string())]))
         print(type(writer))
@@ -129,10 +129,10 @@ def push_tensor(args, client, connection_args={}):
         np.save(data, my_tensor.to_numpy())
         buffer = data.getbuffer()
         schema = pyarrow.schema([('data', pyarrow.binary(buffer.nbytes))])
-        wrapper_table = pyarrow.record_batch([[buffer]], schema)
+        wrapper = pyarrow.record_batch([[buffer]], schema)
         writer, _ = client.do_put(
-            flight.FlightDescriptor.for_path(object_id.binary().hex()), schema)
-        writer.write(wrapper_table)
+            paf.FlightDescriptor.for_path(object_id.binary().hex()), schema)
+        writer.write(wrapper)
         writer.close()
     else:
         print('unknown put data type')
@@ -142,40 +142,22 @@ def push_bytesio(args, client, connection_args={}):
     Pushes a streamable BytesIO object wrapped in a table to the flight server. 
     """
 
-def get_flight(args, client, connection_args={}) -> flight.FlightStreamReader:
+def get_flight(args, client, connection_args={}) -> paf.FlightStreamReader:
     """Invoked via RPC call by the flight client
     """
     if args.path:
-        descriptor = flight.FlightDescriptor.for_path(*args.path)
+        descriptor = paf.FlightDescriptor.for_path(*args.path)
     else:
-        descriptor = flight.FlightDescriptor.for_command(args.command)
+        descriptor = paf.FlightDescriptor.for_command(args.command)
 
     info = client.get_flight_info(descriptor)
     for endpoint in info.endpoints:
         print('Ticket:', endpoint.ticket)
         for location in endpoint.locations:
             print(location)
-            get_client = flight.FlightClient(location,
+            get_client = paf.FlightClient(location,
                                                      **connection_args)
             return get_client.do_get(endpoint.ticket)
-    
-# def get_tensor(args, client, connection_args={}):
-#     if args.path:
-#         descriptor = flight.FlightDescriptor.for_path(*args.path)
-#     else:
-#         descriptor = flight.FlightDescriptor.for_command(args.command)
-
-#     info = client.get_flight_info(descriptor)
-#     for endpoint in info.endpoints:
-#         print('Ticket:', endpoint.ticket)
-#         for location in endpoint.locations:
-#             print(location)
-#             get_client = flight.FlightClient(location,
-#                                                      **connection_args)
-#             reader: flight.FlightStreamReader = get_client.do_get(endpoint.ticket)
-
-#             bytes = reader.read_all()["data"][0].as_py()
-#             print(np.load(BytesIO(bytes)))
 
 def get_df(args, client, connection_args={}):
     reader = get_flight(args, client, connection_args)
@@ -192,7 +174,11 @@ def get_string(args, client, connection_args={}):
 def get_tensor(args, client, connection_args={}):
     reader = get_flight(args, client, connection_args)
     table = reader.read_all()
-    assert(table.schema.field("data").type == pyarrow.binary())
+
+    print(type(table.schema.field("data").type))
+    assert(type(table.schema.field("data").type) == pyarrow.FixedSizeBinaryType)
+    #assert(table.schema.field("data").type == pyarrow.binary())
+
     ndarray = np.load(BytesIO(table["data"][0].as_py()))
     print(ndarray)
 
@@ -305,12 +291,12 @@ def main():
             tls_private_key = key_file.read()
         connection_args["cert_chain"] = tls_cert_chain
         connection_args["private_key"] = tls_private_key
-    client = flight.FlightClient(f"{scheme}://{host}:{port}",
+    client = paf.FlightClient(f"{scheme}://{host}:{port}",
                                          **connection_args)
     while True:
         try:
-            action = flight.Action("healthcheck", b"")
-            options = flight.FlightCallOptions(timeout=1)
+            action = paf.Action("healthcheck", b"")
+            options = paf.FlightCallOptions(timeout=1)
             list(client.do_action(action, options=options))
             break
         except pyarrow.ArrowIOError as e:
