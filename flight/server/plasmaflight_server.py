@@ -242,10 +242,6 @@ class PlasmaFlightServer(flight.FlightServerBase):
 
     def get_flight_info(self, context, descriptor: flight.FlightDescriptor):
         key = PlasmaFlightServer.descriptor_to_key(descriptor)
-        
-        print(key)
-        print(self.flights)
-
         if key in self.flights:
             if self.plasma_client.contains(plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))):
                 object_id = self.flights[key]
@@ -256,29 +252,15 @@ class PlasmaFlightServer(flight.FlightServerBase):
         key = PlasmaFlightServer.descriptor_to_key(descriptor)
         assert key.descriptor_type == flight.DescriptorType.PATH.value
         data = reader.read_all()
-        print(type(data))
-        print(data.to_pandas())
 
         # move to plasma store
         object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))
-        
-        # if isinstance(data, pyarrow.Table) and data.shape == (1,1):
-        #     # store only the data of a unit table 
-        #     self.plasma_client.put(data["data"][0].as_buffer(), object_id)
-        #if isinstance(data, str) or isinstance(data, int):
-        #    self.plasma_client.put(data, object_id)
-        # elif isinstance(data, pyarrow.Tensor):
-        #     PlasmaUtils.put_tensor(self.plasma_client, data, object_id)
-        # elif isinstance(data, pandas.DataFrame):
-        #     PlasmaUtils.put_dataframe(self.plasma_client, data, object_id)
-        if isinstance(data, pyarrow.Table) and isinstance(data["data"][0], pyarrow.FixedSizeBinaryScalar):
-            print("inserting binary object")
-            PlasmaUtils.put_memoryview(self.plasma_client, memoryview(data["data"][0].as_buffer()), object_id)
-            datatype = pyarrow.FixedSizeBinaryScalar
-        elif isinstance(data, pyarrow.Table):
-            print("inserting pandas dataframe")
-            PlasmaUtils.put_dataframe(self.plasma_client, data.to_pandas(), object_id)
-            datatype = pandas.DataFrame
+
+        if isinstance(data, pyarrow.Table):
+            if data.shape == (1,1) and isinstance(data.column(0)[0], pyarrow.FixedSizeBinaryScalar):
+                PlasmaUtils.put_memoryview(self.plasma_client, memoryview(data["data"][0].as_buffer()), object_id)
+            else:
+                PlasmaUtils.put_dataframe(self.plasma_client, data.to_pandas(), object_id)
         else:
             raise Exception("unrecognized data type")
 

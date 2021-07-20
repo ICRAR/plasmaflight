@@ -39,6 +39,15 @@ class PlasmaFlightClient():
     def list_flights(self):
         return self._flight_client.list_flights()
 
+    def get_flight(self, object_id: plasma.ObjectID) -> paf.FlightStreamReader:
+        print(object_id.binary().hex().encode('utf-8'))
+        descriptor = paf.FlightDescriptor.for_path(object_id.binary().hex().encode('utf-8'))
+        info = self._flight_client.get_flight_info(descriptor)
+        for endpoint in info.endpoints:
+            for location in endpoint.locations:
+                get_client = paf.FlightClient(location, **self._connection_args)
+                return get_client.do_get(endpoint.ticket)
+
     def put(self, buffer: memoryview, object_id: plasma.ObjectID):
         descriptor = paf.FlightDescriptor.for_path(object_id.binary().hex())
         schema = pyarrow.schema([('data', pyarrow.binary(buffer.nbytes))])
@@ -47,21 +56,20 @@ class PlasmaFlightClient():
         writer.write(wrapper)
         writer.close()
 
-    def get_flight(self, object_id: plasma.ObjectID):
-        print(object_id.binary().hex().encode('utf-8'))
-        descriptor = paf.FlightDescriptor.for_path(object_id.binary().hex().encode('utf-8'))
-        info = self._flight_client.get_flight_info(descriptor)
-        for endpoint in info.endpoints:
-            print('Ticket:', endpoint.ticket)
-            for location in endpoint.locations:
-                print(location)
-                get_client = paf.FlightClient(location, **self._connection_args)
-                return get_client.do_get(endpoint.ticket)
-
     def get(self, object_id: plasma.ObjectID) -> memoryview:
         reader = self.get_flight(object_id)
         table = reader.read_all()
         return BytesIO(table["data"][0].as_py()).getbuffer()
+
+    def put_table(self, table: pyarrow.Table, object_id: plasma.ObjectID):
+        descriptor = descriptor = paf.FlightDescriptor.for_path(object_id.binary().hex())
+        writer, _ = self._flight_client.do_put(descriptor, table.schema)
+        writer.write_table(table)
+        writer.close()
+
+    def get_table(self, object_id: plasma.ObjectID) -> pyarrow.Table:
+        reader = self.get_flight(object_id)
+        return reader.read_all()
 
 
 def list_flights(args, client: paf.FlightClient, connection_args={}):
