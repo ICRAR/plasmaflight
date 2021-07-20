@@ -139,14 +139,14 @@ class PlasmaFlightServer(flight.FlightServerBase):
     Args:
         flight ([type]): [description]
     """
-    def __init__(self, host="localhost", location:str=None,
+    def __init__(self, host="localhost", location:str=None, plasma_socket:str="/tmp/plasma",
                  tls_certificates:list=None, verify_client:bool=False,
                  root_certificates:bytes=None, auth_handler:flight.ServerAuthHandler=None):
         super(PlasmaFlightServer, self).__init__(
             location, auth_handler, tls_certificates, verify_client,
             root_certificates)
         self.host = host
-        self._socket = "/tmp/plasma"
+        self._socket = plasma_socket
         self.USE_DATAFRAMES = False # store plasma data as dataframe
         self.plasma_client = plasma.connect(self._socket, num_retries=10)
         #try:
@@ -154,7 +154,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
         #    print("no existing plasma store, creating ", self._socket)
         #    self.plasma_server = subprocess.Popen(["plasma_store", "-m", "10000000", "-s", "/tmp/plasma"])#, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         #    self.plasma_client = plasma.connect(self._socket, num_retries=10)
-        self.flights: Dict[FlightKey, Tuple[plasma.ObjectID, pyarrow.DataType]] = {}
+        self.flights: Dict[FlightKey, Tuple[plasma.ObjectID]] = {}
         self.tls_certificates = tls_certificates
 
         # populate flights with existing plasma store
@@ -164,7 +164,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
                 flight.DescriptorType.PATH.value,
                 None,
                 tuple([key.binary().hex().encode('ascii')]))
-            ] = (key, pyarrow.binary())
+            ] = (key)
 
     def __del__(self):
         #self.plasma_server.communicate()
@@ -242,6 +242,10 @@ class PlasmaFlightServer(flight.FlightServerBase):
 
     def get_flight_info(self, context, descriptor: flight.FlightDescriptor):
         key = PlasmaFlightServer.descriptor_to_key(descriptor)
+        
+        print(key)
+        print(self.flights)
+
         if key in self.flights:
             if self.plasma_client.contains(plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))):
                 object_id = self.flights[key]
@@ -278,7 +282,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
         else:
             raise Exception("unrecognized data type")
 
-        self.flights[key] = (object_id, datatype) 
+        self.flights[key] = (object_id) 
 
     def do_get(self, context, ticket: flight.Ticket) -> flight.RecordBatchStream:
         """Invoked via RPC by the flight client"""

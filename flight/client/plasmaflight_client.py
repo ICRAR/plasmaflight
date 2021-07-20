@@ -32,59 +32,36 @@ import pyarrow.csv as csv
 
 class PlasmaFlightClient():
     def __init__(self, host: str, port: int, scheme: str = "grpc+tcp", connection_args={}):
-        scheme = "grpc+tcp"
-        # if args.tls:
-        #     scheme = "grpc+tls"
-        #     if args.tls_roots:
-        #         with open(args.tls_roots, "rb") as root_certs:
-        #             connection_args["tls_root_certs"] = root_certs.read()
-        # if args.mtls:
-        #     with open(args.mtls[0], "rb") as cert_file:
-        #         tls_cert_chain = cert_file.read()
-        #     with open(args.mtls[1], "rb") as key_file:
-        #         tls_private_key = key_file.read()
-        #     connection_args["cert_chain"] = tls_cert_chain
-        #     connection_args["private_key"] = tls_private_key
-
         self._flight_client = paf.FlightClient(
             f"{scheme}://{host}:{port}", **connection_args)
+        self._connection_args = connection_args
     
     def list_flights(self):
-        for flight in client.list_flights():
-            descriptor = flight.descriptor
-            if descriptor.descriptor_type == paf.DescriptorType.PATH:
-                pass
-            elif descriptor.descriptor_type == paf.DescriptorType.CMD:
-                pass
-            else:
-                raise Exception("Unknown descriptor type")
+        return self._flight_client.list_flights()
 
-            print("Total records:", end=" ")
-            if flight.total_records >= 0:
-                print(flight.total_records)
-            else:
-                print("Unknown")
+    def put(self, buffer: memoryview, object_id: plasma.ObjectID):
+        descriptor = paf.FlightDescriptor.for_path(object_id.binary().hex())
+        schema = pyarrow.schema([('data', pyarrow.binary(buffer.nbytes))])
+        wrapper = pyarrow.record_batch([[buffer]], schema)
+        writer, _ = self._flight_client.do_put(descriptor, schema)
+        writer.write(wrapper)
+        writer.close()
 
-            print("Total bytes:", end=" ")
-            if flight.total_bytes >= 0:
-                print(flight.total_bytes)
-            else:
-                print("Unknown")
+    def get_flight(self, object_id: plasma.ObjectID):
+        print(object_id.binary().hex().encode('utf-8'))
+        descriptor = paf.FlightDescriptor.for_path(object_id.binary().hex().encode('utf-8'))
+        info = self._flight_client.get_flight_info(descriptor)
+        for endpoint in info.endpoints:
+            print('Ticket:', endpoint.ticket)
+            for location in endpoint.locations:
+                print(location)
+                get_client = paf.FlightClient(location, **self._connection_args)
+                return get_client.do_get(endpoint.ticket)
 
-            print("Number of endpoints:", len(flight.endpoints))
-            print("Schema:")
-            print(flight.schema)
-            print('---')
-
-        print('\nActions\n=======')
-        for action in client.list_actions():
-            print("Type:", action.type)
-            print("Description:", action.description)
-            print('---')
-
-
-
-
+    def get(self, object_id: plasma.ObjectID) -> memoryview:
+        reader = self.get_flight(object_id)
+        table = reader.read_all()
+        return BytesIO(table["data"][0].as_py()).getbuffer()
 
 
 def list_flights(args, client: paf.FlightClient, connection_args={}):
@@ -186,7 +163,7 @@ def push_tensor(args, client, connection_args={}):
 
         data = BytesIO()
         np.save(data, my_tensor.to_numpy())
-        buffer = data.getbuffer()
+        buffer: memoryview = data.getbuffer()
         schema = pyarrow.schema([('data', pyarrow.binary(buffer.nbytes))])
         wrapper = pyarrow.record_batch([[buffer]], schema)
         writer, _ = client.do_put(
