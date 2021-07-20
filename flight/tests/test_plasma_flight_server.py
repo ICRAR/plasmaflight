@@ -118,11 +118,3 @@ class TestPlasmaFlightClientServer(unittest.TestCase):
         output = np.load(BytesIO(self._client.get(object_id)))
         assert np.array_equal(output, tensor)
 
-class TestPlasmaFlightService(unittest.TestCase):
-    """Tests replicating plasma store over a network"""
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
-
