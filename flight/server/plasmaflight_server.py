@@ -169,7 +169,6 @@ class PlasmaFlightServer(flight.FlightServerBase):
     def __del__(self):
         #self.plasma_server.communicate()
         #self.plasma_server.terminate()
-        print("Terminating")
         pass
 
     @classmethod
@@ -230,7 +229,6 @@ class PlasmaFlightServer(flight.FlightServerBase):
             raise Exception("unknown flight object")
 
     def list_flights(self, context, criteria) -> flight.FlightInfo:
-        print(self.plasma_client.list())
         for key, object_id in self.flights.items():
             if key.command is not None:
                 descriptor = \
@@ -268,23 +266,16 @@ class PlasmaFlightServer(flight.FlightServerBase):
 
     def do_get(self, context, ticket: flight.Ticket) -> flight.RecordBatchStream:
         """Invoked via RPC by the flight client"""
-        # TODO: literal eval does not work with dataclass
-        # key = ast.literal_eval(ticket.ticket.decode())
         key = eval(ticket.ticket.decode())
 
        # plasma memory
         object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))
 
-        # read as dataframe from plasma
-        if self.USE_DATAFRAMES:
-            table = pyarrow.Table.from_pandas(PlasmaUtils.get_dataframe(self.plasma_client, object_id))
-            return flight.RecordBatchStream(table)
-        else:
-            # read as bytes from plasma and wrap in pyarrow table
-            buffer = PlasmaUtils.get_memoryview(self.plasma_client, object_id)
-            schema = pyarrow.schema([('data', pyarrow.binary(buffer.nbytes))])
-            wrapper = pyarrow.Table.from_batches([pyarrow.record_batch([[buffer]], schema)], schema)
-            return flight.RecordBatchStream(wrapper)
+        # read as bytes from plasma and wrap in pyarrow table
+        buffer = PlasmaUtils.get_memoryview(self.plasma_client, object_id)
+        schema = pyarrow.schema([('data', pyarrow.binary(buffer.nbytes))])
+        wrapper = pyarrow.Table.from_batches([pyarrow.record_batch([[buffer]], schema)], schema)
+        return flight.RecordBatchStream(wrapper)
 
     def list_actions(self, context):
         return [
@@ -309,7 +300,6 @@ class PlasmaFlightServer(flight.FlightServerBase):
     def _shutdown(self):
         """Shut down after a delay."""
         print("Server is shutting down...")
-        time.sleep(2)
         self.shutdown()
 
 
