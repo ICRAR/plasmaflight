@@ -31,9 +31,12 @@ import pyarrow.flight as paf
 import pyarrow.plasma as plasma
 import pyarrow.csv as csv
 
+def generate_sha1_object_id(path: bytes) -> plasma.ObjectID:
+    m = hashlib.sha1()
+    m.update(path)
+    id = m.digest()[0:20]
+    return plasma.ObjectID(id)
 
-def uchar_to_char(byte):
-    return byte - 256 if byte > 127 else byte 
 
 class PlasmaFlightClient():
     def __init__(self, socket: str, scheme: str = "grpc+tcp", connection_args={}):

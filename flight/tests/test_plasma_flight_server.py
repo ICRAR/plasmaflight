@@ -15,24 +15,18 @@ import pyarrow.flight
 import pyarrow.plasma as plasma
 
 from server.plasmaflight_server import PlasmaFlightServer
-from client.plasmaflight_client import PlasmaFlightClient
+from client.plasmaflight_client import PlasmaFlightClient, generate_sha1_object_id
 
-def generate_sha1_object_id(path: bytes) -> plasma.ObjectID:
-    m = hashlib.sha1()
-    m.update(path)
-    id = m.digest()[0:20]
-    return plasma.ObjectID(id)
 
 class TestPlasmaFlightClientServer(unittest.TestCase):
     """Tests the plasmaflight client server"""
     def setUp(self):
         plasma_socket = "/tmp/plasma"
         self._store = sp.Popen(["plasma_store", "-m", "100000000", "-s", plasma_socket])
-        
         scheme = "grpc+tcp"
         host = "localhost"
         port = 5005
-        location = "{}://{}:{}".format(scheme, host, port)
+        location = f"{scheme}://{host}:{port}"
         tls_certificates = []
         self._server = PlasmaFlightServer(
             location=location,

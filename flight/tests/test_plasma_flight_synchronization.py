@@ -14,13 +14,7 @@ import pyarrow.flight
 import pyarrow.plasma as plasma
 
 from server.plasmaflight_server import PlasmaFlightServer
-from client.plasmaflight_client import PlasmaFlightClient
-
-def generate_sha1_object_id(path: bytes) -> plasma.ObjectID:
-    m = hashlib.sha1()
-    m.update(path)
-    id = m.digest()[0:20]
-    return plasma.ObjectID(id)
+from client.plasmaflight_client import PlasmaFlightClient, generate_sha1_object_id
 
 class TestPlasmaFlightSynchronization(unittest.TestCase):
     """Tests replicating plasma store over a network"""

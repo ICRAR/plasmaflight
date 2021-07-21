@@ -276,8 +276,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
 
     def do_action(self, context, action):
         if action.type == "clear":
-            raise NotImplementedError(
-                "{} is not implemented.".format(action.type))
+            raise NotImplementedError(f"{action.type} is not implemented.")
         elif action.type == "healthcheck":
             pass
         elif action.type == "shutdown":
@@ -318,7 +317,7 @@ def main():
             tls_private_key = key_file.read()
         tls_certificates.append((tls_cert_chain, tls_private_key))
 
-    location = "{}://{}:{}".format(scheme, args.host, args.port)
+    location = f"{scheme}://{scheme}:{args.port}"
 
     server = PlasmaFlightServer(args.host, location,
                           tls_certificates=tls_certificates,
