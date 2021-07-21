@@ -1,7 +1,7 @@
 
 # PlasmaFlight
 
-A client-server based implementation for transfering plasma store objects. Objects can be passed through the client using the `memoryview` interface.
+A client-server based implementation for transfering plasma store objects over a network. Objects can be passed through the client using the `memoryview` interface.
 
 ## Usage
 
