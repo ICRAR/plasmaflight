@@ -92,8 +92,7 @@ class PlasmaUtils:
         [buf] = client.get_buffers([object_id])
         buffer = pyarrow.BufferReader(buf)
         reader = pyarrow.RecordBatchStreamReader(buffer)
-        record_batch = reader.read_next_batch()
-        return pyarrow.Table.from_batches(record_batch)
+        return reader.read_all()
 
     @classmethod
     def put_tensor(cls, client: plasma.PlasmaClient, data: pyarrow.Tensor, object_id: plasma.ObjectID):
@@ -234,7 +233,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
 
     def get_flight_info(self, context, descriptor: flight.FlightDescriptor):
         key = PlasmaFlightServer.descriptor_to_key(descriptor)
-        object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))
+        object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('ascii')))
         if self.plasma_client.contains(object_id):
             return self._make_flight_info(key, descriptor, object_id)
         raise KeyError('Flight not found.')
@@ -245,7 +244,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
         data = reader.read_all()
 
         # move to plasma store
-        object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))
+        object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('ascii')))
 
         if isinstance(data, pyarrow.Table):
             if data.shape == (1,1) and isinstance(data.column(0)[0], pyarrow.FixedSizeBinaryScalar):
@@ -260,7 +259,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
         key = eval(ticket.ticket.decode())
 
        # plasma memory
-        object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))
+        object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('ascii')))
 
         # read as bytes from plasma and wrap in pyarrow table
         buffer = PlasmaUtils.get_memoryview(self.plasma_client, object_id)
@@ -290,6 +289,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
     def _shutdown(self):
         """Shut down after a delay."""
         print("Server is shutting down...")
+        # TODO: override parent
         self.shutdown()
         self.__del__()
 
