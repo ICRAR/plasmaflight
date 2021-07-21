@@ -112,7 +112,7 @@ class PlasmaUtils:
     @classmethod
     def put_memoryview(cls, client: plasma.PlasmaClient, data: memoryview, object_id: plasma.ObjectID):
         buffer = memoryview(client.create(object_id, data.nbytes))
-        buffer[0:] = data[0:]
+        buffer[:] = data[:]
         client.seal(object_id)
         #client.put(data, object_id)
 
@@ -147,17 +147,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
             print("no existing plasma store, creating ", self._socket)
             self.plasma_server = subprocess.Popen(["plasma_store", "-m", "10000000", "-s", "/tmp/plasma"])#, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.plasma_client = plasma.connect(self._socket, num_retries=10)
-        self.flights: Dict[FlightKey, Tuple[plasma.ObjectID]] = {}
         self.tls_certificates = tls_certificates
-
-        # populate flights with existing plasma store
-        store = self.plasma_client.list()
-        for key in store.keys():
-            self.flights[FlightKey(
-                flight.DescriptorType.PATH.value,
-                None,
-                tuple([key.binary().hex().encode('ascii')]))
-            ] = (key)
 
     def __del__(self):
         if hasattr(self, "plasma_server"):
@@ -213,7 +203,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
             pyarrow.schema([('data', pyarrow.binary(length=data_size))]),
             descriptor, endpoints, 1, data_size)
 
-    def _make_flight_info(self, key: FlightKey, descriptor: flight.FlightDescriptor, data: Any) -> flight.FlightInfo:
+    def _make_flight_info(self, key: FlightKey, descriptor: flight.FlightDescriptor, data: plasma.ObjectID) -> flight.FlightInfo:
         if isinstance(data, pyarrow.Table):
             return self._make_flight_table_info(key, descriptor, data)
         elif isinstance(data, plasma.ObjectID):
@@ -223,11 +213,13 @@ class PlasmaFlightServer(flight.FlightServerBase):
 
     def query_flights(self):
         store = self.plasma_client.list()
+        flights = []
         for key in store.keys():
-            yield  FlightKey(
+            flights.append(FlightKey(
                     flight.DescriptorType.PATH.value,
                     None,
-                    tuple([key.binary().hex().encode('ascii')]))
+                    tuple([key.binary().hex().encode('ascii')])))
+        return flights
 
     def list_flights(self, context, criteria) -> flight.FlightInfo:
         store = self.plasma_client.list()
@@ -242,10 +234,9 @@ class PlasmaFlightServer(flight.FlightServerBase):
 
     def get_flight_info(self, context, descriptor: flight.FlightDescriptor):
         key = PlasmaFlightServer.descriptor_to_key(descriptor)
-        if key in self.query_flights():
-            object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))
-            if self.plasma_client.contains(object_id):
-                return self._make_flight_info(key, descriptor, object_id)
+        object_id = plasma.ObjectID(bytes.fromhex(key.path[0].decode('utf-8')))
+        if self.plasma_client.contains(object_id):
+            return self._make_flight_info(key, descriptor, object_id)
         raise KeyError('Flight not found.')
 
     def do_put(self, context, descriptor: flight.FlightDescriptor, reader: flight.MetadataRecordBatchReader, writer: flight.MetadataRecordBatchWriter):
@@ -263,8 +254,6 @@ class PlasmaFlightServer(flight.FlightServerBase):
                 PlasmaUtils.put_dataframe(self.plasma_client, data.to_pandas(), object_id)
         else:
             raise Exception("unrecognized data type")
-
-        self.flights[key] = (object_id) 
 
     def do_get(self, context, ticket: flight.Ticket) -> flight.RecordBatchStream:
         """Invoked via RPC by the flight client"""

@@ -31,18 +31,20 @@ import pyarrow.flight as paf
 import pyarrow.plasma as plasma
 import pyarrow.csv as csv
 
+
+def uchar_to_char(byte):
+    return byte - 256 if byte > 127 else byte 
+
 class PlasmaFlightClient():
-    def __init__(self, socket: str, remotes: Optional[List[str]] = None, scheme: str = "grpc+tcp", connection_args={}):
+    def __init__(self, socket: str, scheme: str = "grpc+tcp", connection_args={}):
         self.plasma_client = plasma.connect(socket)
-        self._remotes = remotes
         self._scheme = scheme
         self._connection_args = connection_args
 
-    def list_flights(self):
-        for remote in self._remotes:
-            flight_client = paf.FlightClient(
-                f"{self._scheme}://{remote}", **self._connection_args)
-            yield flight_client.list_flights()
+    def list_flights(self, location: str):
+        flight_client = paf.FlightClient(
+            f"{self._scheme}://{location}", **self._connection_args)
+        return flight_client.list_flights()
 
     def get_flight(self, object_id: plasma.ObjectID, location: Optional[str]) -> paf.FlightStreamReader:
         descriptor = paf.FlightDescriptor.for_path(object_id.binary().hex().encode('utf-8'))
@@ -57,54 +59,21 @@ class PlasmaFlightClient():
 
     def put(self, data: memoryview, object_id: plasma.ObjectID):
         buffer = memoryview(self.plasma_client.create(object_id, data.nbytes))
-        #buffer[i] = data[i]
-        # slice assignment does not work with mutable <= immutable.. 
-        for i in range(0, data.nbytes):
-            buffer[i] = data[i]
+        buffer[:] = memoryview(pyarrow.py_buffer(data))[:]
         self.plasma_client.seal(object_id)
 
     def get(self, object_id: plasma.ObjectID, owner: Optional[str] = None) -> memoryview:
-        #first check if the local store contains the object
         if self.plasma_client.contains(object_id):
+            # first check if the local store contains the object
             [buf] = self.plasma_client.get_buffers([object_id])
             return memoryview(buf)
         elif owner is not None:
-
-            flight_client = paf.FlightClient(f"{self._scheme}://{owner}", **self._connection_args)
-            print(object_id)
-            list_flights(flight_client)
-
+            # fetch from the specified owner
             reader = self.get_flight(object_id, owner)
             table = reader.read_all()
-            return BytesIO(table["data"][0].as_py()).getbuffer()
+            output = BytesIO(table.column(0)[0].as_py()).getbuffer()
+            #cache output
+            self.put(output, object_id)
+            return output
         else:
-            raise Exception()
-
-
-def list_flights(client: paf.FlightClient):
-    print('Flights\n=======')
-    for flight in client.list_flights():
-        descriptor = flight.descriptor
-        if descriptor.descriptor_type == paf.DescriptorType.PATH:
-            print("Path:", descriptor.path)
-        elif descriptor.descriptor_type == paf.DescriptorType.CMD:
-            print("Command:", descriptor.command)
-        else:
-            print("Unknown descriptor type")
-
-        print("Total records:", end=" ")
-        if flight.total_records >= 0:
-            print(flight.total_records)
-        else:
-            print("Unknown")
-
-        print("Total bytes:", end=" ")
-        if flight.total_bytes >= 0:
-            print(flight.total_bytes)
-        else:
-            print("Unknown")
-
-        print("Number of endpoints:", len(flight.endpoints))
-        print("Schema:")
-        print(flight.schema)
-        print('---')
+            raise KeyError("ObjectID not found", object_id)

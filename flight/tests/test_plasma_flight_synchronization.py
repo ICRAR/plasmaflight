@@ -39,8 +39,8 @@ class TestPlasmaFlightSynchronization(unittest.TestCase):
             tls_certificates=[],
             verify_client=False)
 
-        self._client0 = PlasmaFlightClient("/tmp/plasma0", ["localhost:5006"])
-        self._client1 = PlasmaFlightClient("/tmp/plasma1", ["localhost:5005"])
+        self._client0 = PlasmaFlightClient("/tmp/plasma0")
+        self._client1 = PlasmaFlightClient("/tmp/plasma1")
 
     def tearDown(self):
         self._server0._shutdown()
@@ -49,14 +49,43 @@ class TestPlasmaFlightSynchronization(unittest.TestCase):
         self._store1.terminate()
 
     def test_string(self):
-        message = "Hello World!"
+        message = "你好"
         input = message.encode('utf-8')
         buffer = memoryview(input)
         object_id = generate_sha1_object_id(input)
+        # local client
         self._client0.put(buffer, object_id)
-        print(self._client0.get(object_id))
         output = self._client0.get(object_id).tobytes().decode('utf-8')
         assert output == message
-
+        # remote client
         output = self._client1.get(object_id, "localhost:5005").tobytes().decode('utf-8')
         assert output == message
+        # remote cache
+        output = self._client1.get(object_id).tobytes().decode('utf-8')
+        assert output == message
+        # remote cache (even if owner is specified)
+        self._server0._shutdown()
+        output = self._client1.get(object_id, "localhost:5005").tobytes().decode('utf-8')
+        assert output == message
+
+    def test_tensor(self):
+        tensor = np.array([[[1,2],[3,4]],[[5,6],[7,8]]])
+        data = BytesIO()
+        np.save(data, tensor)
+        buffer: memoryview = data.getbuffer()
+        object_id = generate_sha1_object_id(b'2x2x2')
+        # local client
+        self._client0.put(buffer, object_id)
+        output = np.load(BytesIO(self._client0.get(object_id)))
+        assert np.array_equal(output, tensor)
+        # remote client
+        output = np.load(BytesIO(self._client1.get(object_id, "localhost:5005")))
+        assert np.array_equal(output, tensor)
+        # remote cache
+        output = np.load(BytesIO(self._client1.get(object_id)))
+        assert np.array_equal(output, tensor)
+        # remote cache (even if owner is specified)
+        self._server0._shutdown()
+        output = np.load(BytesIO(self._client1.get(object_id, "localhost:5005")))
+        assert np.array_equal(output, tensor)
+

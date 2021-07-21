@@ -40,7 +40,7 @@ class TestPlasmaFlightClientServer(unittest.TestCase):
             tls_certificates=tls_certificates,
             verify_client=False)
 
-        self._client = PlasmaFlightClient(host, port, scheme)
+        self._client = PlasmaFlightClient("/tmp/plasma", scheme="grpc+tcp")
 
     def tearDown(self):
         self._server._shutdown()
@@ -53,10 +53,10 @@ class TestPlasmaFlightClientServer(unittest.TestCase):
             plasma_socket="/tmp/plasma",
             tls_certificates=[],
             verify_client=False)
-        self._client = PlasmaFlightClient("localhost", 5005)
+        self._client = PlasmaFlightClient("/tmp/plasma", scheme="grpc+tcp")
 
     def test_list(self):
-        flights = list(self._client.list_flights())
+        flights = list(self._client.list_flights("localhost:5005"))
         assert len(flights) == 0
 
     def test_push_pull_string(self):
@@ -102,7 +102,7 @@ class TestPlasmaFlightClientServer(unittest.TestCase):
         data = BytesIO()
         np.save(data, tensor)
         buffer: memoryview = data.getbuffer()
-        object_id = generate_sha1_object_id('2x2x2'.encode('utf-8'))
+        object_id = generate_sha1_object_id(b'2x2x2')
         self._client.put(buffer, object_id)
         output = np.load(BytesIO(self._client.get(object_id)))
         assert np.array_equal(output, tensor)
@@ -112,7 +112,7 @@ class TestPlasmaFlightClientServer(unittest.TestCase):
         data = BytesIO()
         np.save(data, tensor)
         buffer: memoryview = data.getbuffer()
-        object_id = generate_sha1_object_id('2x2x2'.encode('utf-8'))
+        object_id = generate_sha1_object_id(b'2x2x2')
         self.reinit_clientserver()
         self._client.put(buffer, object_id)
         output = np.load(BytesIO(self._client.get(object_id)))
