@@ -3,13 +3,7 @@ import subprocess as sp
 import unittest
 from six import BytesIO, StringIO
 
-import asyncio
-import os
-import time
-import hashlib
-import pandas
 import numpy as np
-import pyarrow
 import pyarrow.flight
 import pyarrow.plasma as plasma
 
