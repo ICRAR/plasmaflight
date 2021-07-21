@@ -39,6 +39,9 @@ class TestPlasmaFlightSynchronization(unittest.TestCase):
             tls_certificates=[],
             verify_client=False)
 
+        self._client0 = PlasmaFlightClient("/tmp/plasma0", ["localhost:5006"])
+        self._client1 = PlasmaFlightClient("/tmp/plasma1", ["localhost:5005"])
+
     def tearDown(self):
         self._server0._shutdown()
         self._store0.terminate()
@@ -50,5 +53,10 @@ class TestPlasmaFlightSynchronization(unittest.TestCase):
         input = message.encode('utf-8')
         buffer = memoryview(input)
         object_id = generate_sha1_object_id(input)
-        client0 = PlasmaFlightClient("localhost", 5005)
-        client.put(buffer, object_id)
+        self._client0.put(buffer, object_id)
+        print(self._client0.get(object_id))
+        output = self._client0.get(object_id).tobytes().decode('utf-8')
+        assert output == message
+
+        output = self._client1.get(object_id, "localhost:5005").tobytes().decode('utf-8')
+        assert output == message

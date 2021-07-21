@@ -22,6 +22,7 @@ import sys
 
 import hashlib
 from io import BytesIO
+from typing import List, Optional
 
 import numpy as np
 from pandas.core.frame import DataFrame
@@ -31,33 +32,79 @@ import pyarrow.plasma as plasma
 import pyarrow.csv as csv
 
 class PlasmaFlightClient():
-    def __init__(self, host: str, port: int, scheme: str = "grpc+tcp", connection_args={}):
-        self._flight_client = paf.FlightClient(
-            f"{scheme}://{host}:{port}", **connection_args)
+    def __init__(self, socket: str, remotes: Optional[List[str]] = None, scheme: str = "grpc+tcp", connection_args={}):
+        self.plasma_client = plasma.connect(socket)
+        self._remotes = remotes
+        self._scheme = scheme
         self._connection_args = connection_args
-    
+
     def list_flights(self):
-        return self._flight_client.list_flights()
+        for remote in self._remotes:
+            flight_client = paf.FlightClient(
+                f"{self._scheme}://{remote}", **self._connection_args)
+            yield flight_client.list_flights()
 
-    def get_flight(self, object_id: plasma.ObjectID) -> paf.FlightStreamReader:
-        print(object_id.binary().hex().encode('utf-8'))
+    def get_flight(self, object_id: plasma.ObjectID, location: Optional[str]) -> paf.FlightStreamReader:
         descriptor = paf.FlightDescriptor.for_path(object_id.binary().hex().encode('utf-8'))
-        info = self._flight_client.get_flight_info(descriptor)
-        for endpoint in info.endpoints:
-            for location in endpoint.locations:
-                get_client = paf.FlightClient(location, **self._connection_args)
-                return get_client.do_get(endpoint.ticket)
+        if location is not None:
+            flight_client = paf.FlightClient(f"{self._scheme}://{location}", **self._connection_args)
+            info = flight_client.get_flight_info(descriptor)
+            for endpoint in info.endpoints:
+                for location in endpoint.locations:
+                    return flight_client.do_get(endpoint.ticket)
+        else:
+            raise Exception()
 
-    def put(self, buffer: memoryview, object_id: plasma.ObjectID):
-        descriptor = paf.FlightDescriptor.for_path(object_id.binary().hex())
-        schema = pyarrow.schema([('data', pyarrow.binary(buffer.nbytes))])
-        wrapper = pyarrow.record_batch([[buffer]], schema)
-        writer, _ = self._flight_client.do_put(descriptor, schema)
-        writer.write(wrapper)
-        writer.close()
+    def put(self, data: memoryview, object_id: plasma.ObjectID):
+        buffer = memoryview(self.plasma_client.create(object_id, data.nbytes))
+        #buffer[i] = data[i]
+        # slice assignment does not work with mutable <= immutable.. 
+        for i in range(0, data.nbytes):
+            buffer[i] = data[i]
+        self.plasma_client.seal(object_id)
 
-    def get(self, object_id: plasma.ObjectID) -> memoryview:
-        reader = self.get_flight(object_id)
-        table = reader.read_all()
-        return BytesIO(table["data"][0].as_py()).getbuffer()
+    def get(self, object_id: plasma.ObjectID, owner: Optional[str] = None) -> memoryview:
+        #first check if the local store contains the object
+        if self.plasma_client.contains(object_id):
+            [buf] = self.plasma_client.get_buffers([object_id])
+            return memoryview(buf)
+        elif owner is not None:
 
+            flight_client = paf.FlightClient(f"{self._scheme}://{owner}", **self._connection_args)
+            print(object_id)
+            list_flights(flight_client)
+
+            reader = self.get_flight(object_id, owner)
+            table = reader.read_all()
+            return BytesIO(table["data"][0].as_py()).getbuffer()
+        else:
+            raise Exception()
+
+
+def list_flights(client: paf.FlightClient):
+    print('Flights\n=======')
+    for flight in client.list_flights():
+        descriptor = flight.descriptor
+        if descriptor.descriptor_type == paf.DescriptorType.PATH:
+            print("Path:", descriptor.path)
+        elif descriptor.descriptor_type == paf.DescriptorType.CMD:
+            print("Command:", descriptor.command)
+        else:
+            print("Unknown descriptor type")
+
+        print("Total records:", end=" ")
+        if flight.total_records >= 0:
+            print(flight.total_records)
+        else:
+            print("Unknown")
+
+        print("Total bytes:", end=" ")
+        if flight.total_bytes >= 0:
+            print(flight.total_bytes)
+        else:
+            print("Unknown")
+
+        print("Number of endpoints:", len(flight.endpoints))
+        print("Schema:")
+        print(flight.schema)
+        print('---')
