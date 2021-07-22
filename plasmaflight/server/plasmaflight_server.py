@@ -208,16 +208,6 @@ class PlasmaFlightServer(flight.FlightServerBase):
         else:
             raise Exception("unknown flight object")
 
-    def query_flights(self):
-        store = self.plasma_client.list()
-        flights = []
-        for key in store.keys():
-            flights.append(FlightKey(
-                    flight.DescriptorType.PATH.value,
-                    None,
-                    tuple([key.binary().hex().encode('ascii')])))
-        return flights
-
     def list_flights(self, context, criteria) -> flight.FlightInfo:
         store = self.plasma_client.list()
         for key in store.keys():
