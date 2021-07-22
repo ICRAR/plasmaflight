@@ -27,8 +27,8 @@ import numpy as np
 import pyarrow.flight
 import pyarrow.plasma as plasma
 
-from server.plasmaflight_server import PlasmaFlightServer
-from client.plasmaflight_client import PlasmaFlightClient, generate_sha1_object_id
+from icrar.plasmaflight.server.plasmaflight_server import PlasmaFlightServer
+from icrar.plasmaflight.client.plasmaflight_client import PlasmaFlightClient, generate_sha1_object_id
 
 class TestPlasmaFlightSynchronization(unittest.TestCase):
     """Tests replicating plasma store over a network"""

@@ -75,3 +75,14 @@ class PlasmaFlightClient():
             return output
         else:
             raise KeyError("ObjectID not found", object_id)
+
+    def exists(self, object_id: plasma.ObjectID, owner: Optional[str] = None) -> bool:
+        if self.plasma_client.contains(object_id): return True
+        if owner is not None:
+            client = paf.FlightClient(f"{self._scheme}://{owner}", **self._connection_args)
+            try:
+                info = client.get_flight_info(paf.FlightDescriptor.for_path(object_id.binary().hex().encode('utf-8')))
+                return True
+            except:
+                return False
+        return False

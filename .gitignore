@@ -1,1 +1,26 @@
-*.pyc 
+*.py[cod]
+*.egg-info
+*.eggs
+.ipynb_checkpoints
+
+build
+dist
+.cache
+__pycache__
+
+Pipfile.lock
+
+htmlcov
+.coverage
+coverage.xml
+.pytest_cache
+*,cover
+
+docs/_build
+docs/src/_build
+docs/apidocs
+
+# ide
+.idea
+.eclipse
+.vscode

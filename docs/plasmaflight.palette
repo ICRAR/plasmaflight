@@ -1,0 +1,228 @@
+{
+    "modelData": {
+        "fileType": "palette",
+        "repoService": "GitHub",
+        "repoBranch": "master",
+        "repo": "ICRAR/EAGLE-graph-repo",
+        "filePath": "plasma/plasmaflight.palette",
+        "sha": "",
+        "git_url": "",
+        "eagleVersion": "v3.0.2:HEAD",
+        "eagleCommitHash": "5fdd3863355dd800394f5b3d71efc226921643f9",
+        "schemaVersion": "Unknown",
+        "readonly": true
+    },
+    "nodeDataArray": [
+        {
+            "category": "Plasma",
+            "categoryType": "Data",
+            "isData": true,
+            "isGroup": false,
+            "canHaveInputs": true,
+            "canHaveOutputs": true,
+            "color": "#394BB2",
+            "drawOrderHint": 0,
+            "key": -3,
+            "text": "MS stream",
+            "description": "",
+            "x": 0,
+            "y": 0,
+            "width": 200,
+            "height": 200,
+            "collapsed": false,
+            "showPorts": true,
+            "flipPorts": false,
+            "streaming": true,
+            "subject": null,
+            "selected": false,
+            "expanded": false,
+            "readonly": false,
+            "inputPorts": [
+                {
+                    "Id": "fc38b419-8a94-4db3-a184-85da0b9c9b75",
+                    "IdText": "MS",
+                    "event": false,
+                    "type": "Complex"
+                }
+            ],
+            "outputPorts": [
+                {
+                    "Id": "a940fa38-f40f-4d88-adf0-61af7ee69986",
+                    "IdText": "MS",
+                    "event": false,
+                    "type": "Complex"
+                }
+            ],
+            "inputLocalPorts": [],
+            "outputLocalPorts": [],
+            "fields": [
+                {
+                    "text": "Data volume",
+                    "name": "data_volume",
+                    "value": 5,
+                    "description": "Estimated size of the data contained in this node",
+                    "readonly": false,
+                    "type": "Float"
+                },
+                {
+                    "text": "Group end",
+                    "name": "group_end",
+                    "value": false,
+                    "description": "Is this node the end of a group?",
+                    "readonly": false,
+                    "type": "Boolean"
+                }
+            ],
+            "inputAppFields": [],
+            "outputAppFields": [],
+            "exitAppFields": [],
+            "inputApplicationName": "",
+            "inputApplicationType": "None",
+            "inputApplicationKey": null,
+            "outputApplicationName": "",
+            "outputApplicationType": "None",
+            "outputApplicationKey": null,
+            "exitApplicationName": "",
+            "exitApplicationType": "None",
+            "exitApplicationKey": null
+        },
+        {
+            "category": "Docker",
+            "categoryType": "Application",
+            "isData": false,
+            "isGroup": false,
+            "canHaveInputs": true,
+            "canHaveOutputs": true,
+            "color": "#331C54",
+            "drawOrderHint": 0,
+            "key": -6,
+            "text": "Plasma Store",
+            "description": "This starts the plasma store in a separate container. Problem is shutdown at the end of the execution does not happen.",
+            "x": 729.9328995400987,
+            "y": 78.86860475438222,
+            "width": 200,
+            "height": 200,
+            "collapsed": false,
+            "showPorts": false,
+            "flipPorts": false,
+            "streaming": false,
+            "subject": null,
+            "selected": false,
+            "expanded": false,
+            "readonly": false,
+            "inputPorts": [
+                {
+                    "Id": "0a32c1e9-a6ee-4600-b3d0-4a43745a5857",
+                    "IdText": "event",
+                    "event": true,
+                    "type": "Unknown"
+                }
+            ],
+            "outputPorts": [],
+            "inputLocalPorts": [],
+            "outputLocalPorts": [],
+            "fields": [
+                {
+                    "text": "Execution time",
+                    "name": "execution_time",
+                    "value": 5,
+                    "description": "Estimate of execution time (in seconds) for this application.",
+                    "readonly": false,
+                    "type": "Float"
+                },
+                {
+                    "text": "Num CPUs",
+                    "name": "num_cpus",
+                    "value": 1,
+                    "description": "Number of CPUs used for this application.",
+                    "readonly": false,
+                    "type": "Integer"
+                },
+                {
+                    "text": "Group start",
+                    "name": "group_start",
+                    "value": false,
+                    "description": "Is this node the start of a group?",
+                    "readonly": false,
+                    "type": "Boolean"
+                },
+                {
+                    "text": "Image",
+                    "name": "image",
+                    "value": "icrar/plasma_store:0.3",
+                    "description": "The name of the docker image to be used for this application",
+                    "readonly": false,
+                    "type": "String"
+                },
+                {
+                    "text": "Tag",
+                    "name": "tag",
+                    "value": "",
+                    "description": "The tag of the docker image to be used for this application",
+                    "readonly": false,
+                    "type": "String"
+                },
+                {
+                    "text": "Digest",
+                    "name": "digest",
+                    "value": "",
+                    "description": "The hexadecimal hash (long version) of the docker image to be used for this application",
+                    "readonly": false,
+                    "type": "String"
+                },
+                {
+                    "text": "Command",
+                    "name": "command",
+                    "value": "plasma_store -m 10000000 -s /var/dlg_home/tmp/plasma.socket",
+                    "description": "The command line to run within the docker instance. The specified command will be executed in a bash shell. That means that images will need a bash shell.",
+                    "readonly": false,
+                    "type": "String"
+                },
+                {
+                    "text": "User",
+                    "name": "user",
+                    "value": "",
+                    "description": "Username of the user who will run the application within the docker image",
+                    "readonly": false,
+                    "type": "String"
+                },
+                {
+                    "text": "Ensure User And Switch",
+                    "name": "ensureUserAndSwitch",
+                    "value": false,
+                    "description": "Make sure the user specified in the User parameter exists and then run the docker container as that user",
+                    "readonly": false,
+                    "type": "Boolean"
+                },
+                {
+                    "text": "Remove Container",
+                    "name": "removeContainer",
+                    "value": false,
+                    "description": "Instruct Docker engine to delete the container after execution is complete",
+                    "readonly": false,
+                    "type": "Boolean"
+                },
+                {
+                    "text": "Additional Bindings",
+                    "name": "additionalBindings",
+                    "value": "/var/dlg_home:/var/dlg_home",
+                    "description": "Directories which will be visible inside the container during run-time. Format is srcdir_on_host:trgtdir_on_container. Multiple entries can be separated by commas.",
+                    "readonly": false,
+                    "type": "String"
+                }
+            ],
+            "inputAppFields": [],
+            "outputAppFields": [],
+            "exitAppFields": [],
+            "inputApplicationName": "",
+            "inputApplicationType": "None",
+            "inputApplicationKey": null,
+            "outputApplicationName": "",
+            "outputApplicationType": "None",
+            "outputApplicationKey": null,
+            "exitApplicationName": "",
+            "exitApplicationType": "None",
+            "exitApplicationKey": null
+        }
+    ]
+}

@@ -28,9 +28,8 @@ import pyarrow
 import pyarrow.flight
 import pyarrow.plasma as plasma
 
-from server.plasmaflight_server import PlasmaFlightServer
-from client.plasmaflight_client import PlasmaFlightClient, generate_sha1_object_id
-
+from icrar.plasmaflight import PlasmaFlightServer
+from icrar.plasmaflight import PlasmaFlightClient, generate_sha1_object_id
 
 class TestPlasmaFlightClientServer(unittest.TestCase):
     """Tests the plasmaflight client server"""
@@ -81,8 +80,11 @@ class TestPlasmaFlightClientServer(unittest.TestCase):
         input = message.encode('utf-8')
         buffer = memoryview(input)
         object_id = generate_sha1_object_id(input)
+        assert self._client.exists(object_id) == False
         self._client.put(buffer, object_id)
+        assert self._client.exists(object_id) == True
         self.reinit_clientserver()
+        assert self._client.exists(object_id) == True
         output = self._client.get(object_id)
         assert output.tobytes().decode('utf-8') == message
 
@@ -100,8 +102,11 @@ class TestPlasmaFlightClientServer(unittest.TestCase):
         input = message.encode('utf-8')
         buffer = memoryview(input)
         object_id = generate_sha1_object_id(input)
-        self.reinit_clientserver()
+        assert self._client.exists(object_id) == False
         self._client.put(buffer, object_id)
+        assert self._client.exists(object_id) == True
+        self.reinit_clientserver()
+        assert self._client.exists(object_id) == True
         output = self._client.get(object_id)
         assert output.tobytes().decode('utf-8') == message
 
@@ -121,8 +126,11 @@ class TestPlasmaFlightClientServer(unittest.TestCase):
         np.save(data, tensor)
         buffer: memoryview = data.getbuffer()
         object_id = generate_sha1_object_id(b'2x2x2')
-        self.reinit_clientserver()
+        assert self._client.exists(object_id) == False
         self._client.put(buffer, object_id)
+        assert self._client.exists(object_id) == True
+        self.reinit_clientserver()
+        assert self._client.exists(object_id) == True
         output = np.load(BytesIO(self._client.get(object_id)))
         assert np.array_equal(output, tensor)
 

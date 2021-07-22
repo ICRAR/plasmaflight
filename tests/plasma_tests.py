@@ -29,7 +29,7 @@ import numpy as np
 import pyarrow
 import pyarrow.plasma as plasma
 
-from server.plasmaflight_server import PlasmaUtils
+from plasmaflight.server.plasmaflight_server import PlasmaUtils
 
 class TestPlasma(unittest.TestCase):
     PLASMA_SOCKET = '/tmp/plasma'
