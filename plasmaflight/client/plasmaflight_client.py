@@ -58,9 +58,7 @@ class PlasmaFlightClient():
             raise Exception()
 
     def put(self, data: memoryview, object_id: plasma.ObjectID):
-        buffer = memoryview(self.plasma_client.create(object_id, data.nbytes))
-        buffer[:] = memoryview(pyarrow.py_buffer(data))[:]
-        self.plasma_client.seal(object_id)
+        self.plasma_client.put_raw_buffer(data, object_id)
 
     def get(self, object_id: plasma.ObjectID, owner: Optional[str] = None) -> memoryview:
         if self.plasma_client.contains(object_id):

@@ -137,6 +137,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
         super(PlasmaFlightServer, self).__init__(
             location, auth_handler, tls_certificates, verify_client,
             root_certificates)
+        self.host = host
         self._socket = plasma_socket
         try:
             self.plasma_client = plasma.connect(self._socket, num_retries=10)
