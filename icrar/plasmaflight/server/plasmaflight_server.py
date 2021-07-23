@@ -19,6 +19,7 @@
 #    Foundation, Inc., 59 Temple Place, Suite 330, Boston,
 #    MA 02111-1307  USA
 #
+from os import times
 from typing import Any, Dict, Tuple, Optional, List
 from overrides import overrides
 from dataclasses import dataclass, astuple
@@ -77,13 +78,11 @@ class PlasmaUtils:
 
     @classmethod
     def put_table(cls, client: plasma.PlasmaClient, data: pyarrow.Table, object_id: plasma.ObjectID):
-        # TODO: calculate table size?
-        # buf = self.plasma_client.create(object_id, data.nbytes * data.num_rows * data.num_columns)
-        # stream = pyarrow.FixedSizeBufferWriter(buf)
-        # stream_writer = pyarrow.RecordBatchStreamWriter(stream, data.schema)
-        # stream_writer.write_table(data)
-        # stream_writer.close()
-        raise NotImplementedError()
+        buf = client.create(object_id, data.nbytes * data.num_rows * data.num_columns) # TODO: incorrect size
+        stream = pyarrow.FixedSizeBufferWriter(buf)
+        stream_writer = pyarrow.RecordBatchStreamWriter(stream, data.schema)
+        stream_writer.write_table(data)
+        stream_writer.close()
 
     @classmethod
     def get_table(cls, client: plasma.PlasmaClient, object_id: plasma.ObjectID) -> pyarrow.Table:
@@ -143,7 +142,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
             self.plasma_client = plasma.connect(self._socket, num_retries=10)
         except:
             print("no existing plasma store, creating ", self._socket)
-            self.plasma_server = subprocess.Popen(["plasma_store", "-m", "10000000", "-s", "/tmp/plasma"])#, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.plasma_server = subprocess.Popen(["plasma_store", "-m", "10000000", "-s", "/tmp/plasma"])
             self.plasma_client = plasma.connect(self._socket, num_retries=10)
         self.tls_certificates = tls_certificates
 
@@ -306,7 +305,7 @@ def main():
             tls_private_key = key_file.read()
         tls_certificates.append((tls_cert_chain, tls_private_key))
 
-    location = f"{scheme}://{scheme}:{args.port}"
+    location = f"{scheme}://{args.host}:{args.port}"
 
     server = PlasmaFlightServer(args.host, location,
                           tls_certificates=tls_certificates,

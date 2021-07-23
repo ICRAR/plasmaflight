@@ -1,23 +1,26 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import setuptools
-from setuptools import find_packages, setup
+from setuptools import find_namespace_packages, setup
 
 with open('README.md') as readme_file:
     readme = readme_file.read()
+with open('VERSION.txt') as version_file:
+    version = version_file.read().strip()
 
 setup(
     name='plasmaflight',
-    version='0.0.1',
-    description="",
-    long_description=readme + '\n\n',
+    version=version,
+    description="Provides a plasma_store backed flight server",
+    long_description=readme,
+    long_description_content_type='text/markdown',
     author="ICRAR DIA",
-    author_email='callan.gray@uwa.edu.au',
-    url='https://github.com/ska-telescope/ska-python-skeleton',
-    #packages=setuptools.find_namespace_packages(where="", include=["ska.*"]),
-    #package_dir={"": "src"},
-    packages=find_packages(exclude=['tests']),
+    author_email='callan.gray@icrar.org',
+    url='https://github.com/ICRAR/plasmaflight',
+    packages=find_namespace_packages(where=".", include=["icrar.*"]),
+    entry_points={
+        'console_scripts': ['plasmaflight=icrar.plasmaflight:main']
+    },
     include_package_data=True,
     license="LGPLv3 license",
     zip_safe=True,
@@ -32,7 +35,12 @@ setup(
         'Programming Language :: Python :: 3.6',
     ],
     test_suite='tests',
-    install_requires=[],  # FIXME: add your package's dependencies to this list
+    install_requires=[
+        'overrides',
+        'pyarrow',
+        'numpy',
+        'pandas'
+    ],
     setup_requires=[
         # dependency for `python setup.py test`
         'pytest-runner',
