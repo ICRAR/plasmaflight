@@ -1,2 +1,5 @@
 overrides
 pyarrow
+six
+numpy
+pandas
