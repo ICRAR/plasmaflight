@@ -37,9 +37,7 @@ setup(
     test_suite='tests',
     install_requires=[
         'overrides',
-        'pyarrow',
-        'numpy',
-        'pandas'
+        'pyarrow'
     ],
     setup_requires=[
         # dependency for `python setup.py test`
@@ -49,6 +47,9 @@ setup(
         'recommonmark'
     ],
     tests_require=[
+        'six',
+        'numpy',
+        'pandas',
         'pytest',
         'pytest-cov',
         'pytest-json-report',

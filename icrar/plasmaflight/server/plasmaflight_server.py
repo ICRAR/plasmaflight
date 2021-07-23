@@ -28,7 +28,6 @@ import subprocess
 import argparse
 import threading
 
-import pandas
 import pyarrow
 import pyarrow.flight as flight
 import pyarrow.plasma as plasma
@@ -54,7 +53,7 @@ class FlightKey:
 
 class PlasmaUtils:
     @classmethod
-    def put_dataframe(cls, client: plasma.PlasmaClient, data: pandas.DataFrame, object_id: plasma.ObjectID):
+    def put_dataframe(cls, client: plasma.PlasmaClient, data: "pandas.DataFrame", object_id: plasma.ObjectID):
         record_batch: pyarrow.RecordBatch = pyarrow.RecordBatch.from_pandas(data)
         mock_sink = pyarrow.MockOutputStream()
         stream_writer = pyarrow.RecordBatchStreamWriter(mock_sink, record_batch.schema)
@@ -69,7 +68,7 @@ class PlasmaUtils:
         client.seal(object_id)
 
     @classmethod
-    def get_dataframe(cls, client: plasma.PlasmaClient, object_id: plasma.ObjectID) -> pandas.DataFrame:
+    def get_dataframe(cls, client: plasma.PlasmaClient, object_id: plasma.ObjectID) -> "pandas.DataFrame":
         [buf] = client.get_buffers([object_id])
         buffer = pyarrow.BufferReader(buf)
         reader = pyarrow.RecordBatchStreamReader(buffer)

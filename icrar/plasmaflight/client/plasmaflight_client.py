@@ -23,7 +23,6 @@ import hashlib
 from io import BytesIO
 from typing import List, Optional
 
-import numpy as np
 import pyarrow
 import pyarrow.flight as paf
 import pyarrow.plasma as plasma
