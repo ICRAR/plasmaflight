@@ -20,6 +20,7 @@ object_id = generate_sha1_object_id(b'my_key')
 data = memoryview("你好".encode('utf-8'))
 
 client = PlasmaFlightClient("/tmp/plasma0")
+client.put(data, object_id)
 print(client.get(object_id).tobytes().decode('utf-8'))
 >> 你好
 ```
