@@ -54,8 +54,7 @@ class FlightKey:
 class PlasmaUtils:
     @classmethod
     def put_dataframe(cls, client: plasma.PlasmaClient, data, object_id: plasma.ObjectID):
-        """[summary]
-
+        """
         Args:
             client (plasma.PlasmaClient): [description]
             data (pandas.DataFrame): [description]
@@ -76,8 +75,7 @@ class PlasmaUtils:
 
     @classmethod
     def get_dataframe(cls, client: plasma.PlasmaClient, object_id: plasma.ObjectID):
-        """[summary]
-
+        """
         Returns:
             [pandas.DataFrame]: [description]
         """
@@ -141,20 +139,22 @@ class PlasmaFlightServer(flight.FlightServerBase):
     implemented by transfering pyarrow tables that can contain a variety of
     data types including fixed sized binary blobs.
     """
-    def __init__(self, host="localhost", location:str=None, plasma_socket:str="/tmp/plasma",
-                 tls_certificates:list=None, verify_client:bool=False,
-                 root_certificates:bytes=None, auth_handler:flight.ServerAuthHandler=None):
+    def __init__(self,
+            host="localhost",
+            location:str=None, 
+            num_retries=20,
+            run_plasma=False,
+            plasma_socket:str="/tmp/plasma",
+            tls_certificates:list=None, verify_client:bool=False,
+            root_certificates:bytes=None, auth_handler:flight.ServerAuthHandler=None):
         super(PlasmaFlightServer, self).__init__(
             location, auth_handler, tls_certificates, verify_client,
             root_certificates)
         self.host = host
         self._socket = plasma_socket
-        try:
-            self.plasma_client = plasma.connect(self._socket, num_retries=10)
-        except:
-            print("no existing plasma store, creating ", self._socket)
+        if run_plasma:
             self.plasma_server = subprocess.Popen(["plasma_store", "-m", "10000000", "-s", "/tmp/plasma"])
-            self.plasma_client = plasma.connect(self._socket, num_retries=10)
+        self.plasma_client = plasma.connect(self._socket, num_retries=num_retries)
         self.tls_certificates = tls_certificates
 
     def __del__(self):
@@ -299,6 +299,13 @@ def main():
                         help="Address or hostname to listen on")
     parser.add_argument("--port", type=int, default=5005,
                         help="Port number to listen on")
+    parser.add_argument("--socket", type=str, default="/tmp/plasma",
+                        help="The socket path of the plasma store")
+    parser.add_argument("--num_retries", type=int, default=20,
+                        help="Number of retries when connecting to plasma_store")
+    parser.add_argument("--run_plasma", type=bool, default=False,
+                        help="Set to true to additionally host the plasma store")
+
     parser.add_argument("--tls", nargs=2, default=None,
                         metavar=('CERTFILE', 'KEYFILE'),
                         help="Enable transport-level security")
@@ -319,8 +326,11 @@ def main():
     location = f"{scheme}://{args.host}:{args.port}"
 
     server = PlasmaFlightServer(args.host, location,
-                          tls_certificates=tls_certificates,
-                          verify_client=args.verify_client)
+                        plasma_socket=args.socket,
+                        num_retries=args.num_retries,
+                        run_plasma=args.run_plasma,
+                        tls_certificates=tls_certificates,
+                        verify_client=args.verify_client)
     print("Serving on", location)
     server.serve()
 

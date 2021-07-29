@@ -36,6 +36,12 @@ def generate_sha1_object_id(path: bytes) -> plasma.ObjectID:
 
 class PlasmaFlightClient():
     def __init__(self, socket: str, scheme: str = "grpc+tcp", connection_args={}):
+        """
+        Args:
+            socket (str): The socket of the local plasma store
+            scheme (str, optional): [description]. Defaults to "grpc+tcp".
+            connection_args (dict, optional): [description]. Defaults to {}.
+        """
         self.plasma_client = plasma.connect(socket)
         self._scheme = scheme
         self._connection_args = connection_args

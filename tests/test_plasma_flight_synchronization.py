@@ -23,7 +23,6 @@ import unittest
 import subprocess as sp
 
 from six import BytesIO, StringIO
-import pandas
 import numpy as np
 import pyarrow.flight
 import pyarrow.plasma as plasma

@@ -23,8 +23,8 @@
             "color": "#394BB2",
             "drawOrderHint": 0,
             "key": -3,
-            "text": "MS stream",
-            "description": "",
+            "text": "PlasmaFlight",
+            "description": "A plasma drop backed by a flight service for network synchronization",
             "x": 0,
             "y": 0,
             "width": 200,
@@ -71,6 +71,22 @@
                     "description": "Is this node the end of a group?",
                     "readonly": false,
                     "type": "Boolean"
+                },
+                {
+                    "text": "Plasma path",
+                    "name": "plasma_path",
+                    "description": "Location of the local plasma store",
+                    "value": "/var/dlg_home",
+                    "readonly": false,
+                    "type": "String"
+                },
+                {
+                    "text": "Flight path",
+                    "name": "flight_path",
+                    "description": "Location of the local flight server",
+                    "value": "localhost:5005",
+                    "readonly": false,
+                    "type": "String"
                 }
             ],
             "inputAppFields": [],
@@ -96,7 +112,7 @@
             "color": "#331C54",
             "drawOrderHint": 0,
             "key": -6,
-            "text": "Plasma Store",
+            "text": "PlasmaFlight Service",
             "description": "This starts the plasma store in a separate container. Problem is shutdown at the end of the execution does not happen.",
             "x": 729.9328995400987,
             "y": 78.86860475438222,
@@ -149,7 +165,7 @@
                 {
                     "text": "Image",
                     "name": "image",
-                    "value": "icrar/plasma_store:0.3",
+                    "value": "ghcr.io/icrar/plasmaflight:main",
                     "description": "The name of the docker image to be used for this application",
                     "readonly": false,
                     "type": "String"
@@ -173,7 +189,7 @@
                 {
                     "text": "Command",
                     "name": "command",
-                    "value": "plasma_store -m 10000000 -s /var/dlg_home/tmp/plasma.socket",
+                    "value": "plasmaflight --port 5005 --socket /tmp/.dlg/var/dlg_home/tmp/plasma.socket",
                     "description": "The command line to run within the docker instance. The specified command will be executed in a bash shell. That means that images will need a bash shell.",
                     "readonly": false,
                     "type": "String"
