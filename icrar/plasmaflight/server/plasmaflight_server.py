@@ -153,7 +153,7 @@ class PlasmaFlightServer(flight.FlightServerBase):
         self.host = host
         self._socket = plasma_socket
         if run_plasma:
-            self.plasma_server = subprocess.Popen(["plasma_store", "-m", "10000000", "-s", "/tmp/plasma"])
+            self.plasma_server = subprocess.Popen(["plasma_store", "-m", "10000000", "-s", plasma_socket])
         self.plasma_client = plasma.connect(self._socket, num_retries=num_retries)
         self.tls_certificates = tls_certificates
 
