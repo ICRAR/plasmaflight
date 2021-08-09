@@ -14,7 +14,7 @@
     },
     "nodeDataArray": [
         {
-            "category": "Plasma",
+            "category": "PlasmaFlight",
             "categoryType": "Data",
             "isData": true,
             "isGroup": false,
@@ -87,6 +87,11 @@
                     "value": "localhost:5005",
                     "readonly": false,
                     "type": "String"
+                },
+                {
+                    "text": "ObjectID",
+                    "name": "object_id",
+                    
                 }
             ],
             "inputAppFields": [],

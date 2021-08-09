@@ -1,6 +1,5 @@
 FROM debian:bullseye-slim
 
-RUN apt -y update --fix-missing
 RUN apt -y install python3-pip
 # RUN python3 -m pip install -U pip
 COPY / /plasmaflight
