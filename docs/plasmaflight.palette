@@ -40,17 +40,17 @@
             "inputPorts": [
                 {
                     "Id": "fc38b419-8a94-4db3-a184-85da0b9c9b75",
-                    "IdText": "MS",
+                    "IdText": "Message",
                     "event": false,
-                    "type": "Complex"
+                    "type": "String"
                 }
             ],
             "outputPorts": [
                 {
                     "Id": "a940fa38-f40f-4d88-adf0-61af7ee69986",
-                    "IdText": "MS",
+                    "IdText": "Message",
                     "event": false,
-                    "type": "Complex"
+                    "type": "String"
                 }
             ],
             "inputLocalPorts": [],
@@ -73,25 +73,27 @@
                     "type": "Boolean"
                 },
                 {
-                    "text": "Plasma path",
-                    "name": "plasma_path",
-                    "description": "Location of the local plasma store",
-                    "value": "/var/dlg_home",
-                    "readonly": false,
-                    "type": "String"
-                },
-                {
                     "text": "Flight path",
                     "name": "flight_path",
-                    "description": "Location of the local flight server",
-                    "value": "localhost:5005",
+                    "description": "Location of the owner plasma flight server",
+                    "value": "0.0.0.0:5005",
                     "readonly": false,
                     "type": "String"
                 },
                 {
                     "text": "ObjectID",
                     "name": "object_id",
-                    
+                    "description": "Object ID for the plasma store",
+                    "readonly": false,
+                    "type": "String"
+                },
+                {
+                    "text": "Plasma path",
+                    "name": "plasma_path",
+                    "description": "Location of the local plasma store",
+                    "value": "/var/dlg_home",
+                    "readonly": false,
+                    "type": "String"
                 }
             ],
             "inputAppFields": [],
@@ -194,7 +196,7 @@
                 {
                     "text": "Command",
                     "name": "command",
-                    "value": "plasmaflight --port 5005 --socket /tmp/.dlg/var/dlg_home/tmp/plasma.socket",
+                    "value": "plasmaflight --host 0.0.0.0 --port 5005 --socket /tmp/.dlg/var/dlg_home/tmp/plasma.socket",
                     "description": "The command line to run within the docker instance. The specified command will be executed in a bash shell. That means that images will need a bash shell.",
                     "readonly": false,
                     "type": "String"
@@ -230,7 +232,15 @@
                     "description": "Directories which will be visible inside the container during run-time. Format is srcdir_on_host:trgtdir_on_container. Multiple entries can be separated by commas.",
                     "readonly": false,
                     "type": "String"
-                }
+                },
+                {
+                    "text": "Port Mappings",
+                    "name": "portMappings",
+                    "value": "5005:5005",
+                    "description": "Port mapping on the host machine",
+                    "readonly": false,
+                    "type": "String"
+                },
             ],
             "inputAppFields": [],
             "outputAppFields": [],
