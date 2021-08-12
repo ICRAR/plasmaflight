@@ -305,10 +305,11 @@ def main():
                         help="Number of retries when connecting to plasma_store")
     parser.add_argument("--run_plasma", type=bool, default=False,
                         help="Set to true to additionally host the plasma store")
-
     parser.add_argument("--tls", nargs=2, default=None,
                         metavar=('CERTFILE', 'KEYFILE'),
                         help="Enable transport-level security")
+    parser.add_argument("--ctls", type=str, default=None,
+                        help="")
     parser.add_argument("--verify_client", type=bool, default=False,
                         help="enable mutual TLS and verify the client if True")
 
@@ -322,14 +323,18 @@ def main():
         with open(args.tls[1], "rb") as key_file:
             tls_private_key = key_file.read()
         tls_certificates.append((tls_cert_chain, tls_private_key))
+    client_cert_chain=None
+    if args.ctls:
+        with open(args.ctls, "rb") as cert_file:
+            client_cert_chain = cert_file.read()
 
     location = f"{scheme}://{args.host}:{args.port}"
-
     server = PlasmaFlightServer(args.host, location,
                         plasma_socket=args.socket,
                         num_retries=args.num_retries,
                         run_plasma=args.run_plasma,
                         tls_certificates=tls_certificates,
+                        root_certificates=client_cert_chain,
                         verify_client=args.verify_client)
     print("Serving on", location)
     server.serve()
