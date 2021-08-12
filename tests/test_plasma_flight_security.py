@@ -26,7 +26,6 @@ from six import BytesIO, StringIO
 import numpy as np
 import pyarrow.flight
 import pyarrow.plasma as plasma
-import docker
 
 from icrar.plasmaflight.server.plasmaflight_server import PlasmaFlightServer
 from icrar.plasmaflight.client.plasmaflight_client import PlasmaFlightClient, generate_sha1_object_id
@@ -57,9 +56,6 @@ class TestPlasmaFlightSecurity(unittest.TestCase):
 
         tls_certificates = []
         tls_certificates.append((tls_cert_chain, tls_private_key))
-        
-        connection_args = {}
-        connection_args["tls_root_certs"] = tls_cert_chain
 
         self._server = PlasmaFlightServer(
             location=location,
@@ -68,17 +64,23 @@ class TestPlasmaFlightSecurity(unittest.TestCase):
             verify_client=False)
         
         self._client0 = PlasmaFlightClient("/tmp/plasma0", scheme=scheme)
-        self._client1 = PlasmaFlightClient("/tmp/plasma1", scheme=scheme, connection_args=connection_args)
-
         message = "Hello World!"
         input = message.encode('utf-8')
         buffer = memoryview(input)
         object_id = generate_sha1_object_id(input)
         self._client0.put(buffer, object_id)
-        
         output0 = self._client0.get(object_id)
         assert output0.tobytes().decode('utf-8') == message
 
+        def query():
+            self._client1.get(object_id, "localhost:5000")
+
+        connection_args = {}
+        self._client1 = PlasmaFlightClient("/tmp/plasma1", scheme=scheme, connection_args=connection_args)
+        self.assertRaises(pyarrow.flight.FlightUnavailableError, query)
+
+        connection_args["tls_root_certs"] = tls_cert_chain
+        self._client1 = PlasmaFlightClient("/tmp/plasma1", scheme=scheme, connection_args=connection_args)
         output1 = self._client1.get(object_id, "localhost:5000")
         assert output1.tobytes().decode('utf-8') == message
     
@@ -104,11 +106,6 @@ class TestPlasmaFlightSecurity(unittest.TestCase):
 
         tls_certificates = []
         tls_certificates.append((server_cert_chain, server_private_key))
-        
-        connection_args = {}
-        connection_args["tls_root_certs"] = server_cert_chain
-        connection_args["cert_chain"] = client_cert_chain
-        connection_args["private_key"] = client_private_key
 
         self._server = PlasmaFlightServer(
             location=location,
@@ -117,17 +114,33 @@ class TestPlasmaFlightSecurity(unittest.TestCase):
             root_certificates=client_cert_chain,
             verify_client=True)
         
+        # querying local store never goes through the network
         self._client0 = PlasmaFlightClient("/tmp/plasma0", scheme=scheme)
-        self._client1 = PlasmaFlightClient("/tmp/plasma1", scheme=scheme, connection_args=connection_args)
-
         message = "Hello World!"
         input = message.encode('utf-8')
         buffer = memoryview(input)
         object_id = generate_sha1_object_id(input)
         self._client0.put(buffer, object_id)
-        
         output0 = self._client0.get(object_id)
         assert output0.tobytes().decode('utf-8') == message
 
+
+        def query():
+            self._client1.get(object_id, "localhost:5000")
+
+        connection_args = {}
+        self._client1 = PlasmaFlightClient("/tmp/plasma1", scheme=scheme, connection_args=connection_args)
+        self.assertRaises(pyarrow.flight.FlightUnavailableError, query)
+
+        connection_args["tls_root_certs"] = server_cert_chain
+        self._client1 = PlasmaFlightClient("/tmp/plasma1", scheme=scheme, connection_args=connection_args)
+        self.assertRaises(pyarrow.flight.FlightUnavailableError, query)
+
+        connection_args["cert_chain"] = client_cert_chain
+        self._client1 = PlasmaFlightClient("/tmp/plasma1", scheme=scheme, connection_args=connection_args)
+        self.assertRaises(pyarrow.flight.FlightUnavailableError, query)
+
+        connection_args["private_key"] = client_private_key
+        self._client1 = PlasmaFlightClient("/tmp/plasma1", scheme=scheme, connection_args=connection_args)
         output1 = self._client1.get(object_id, "localhost:5000")
         assert output1.tobytes().decode('utf-8') == message
