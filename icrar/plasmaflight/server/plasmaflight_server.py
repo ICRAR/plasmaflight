@@ -312,7 +312,7 @@ def main():
                         metavar=('CERTFILE', 'KEYFILE'),
                         help="Enable transport-level security")
     parser.add_argument("--ctls", type=str, default=None,
-                        help="")
+                        help="client tls root certificate file")
     parser.add_argument("--verify_client", type=bool, default=False,
                         help="enable mutual TLS and verify the client if True")
 
